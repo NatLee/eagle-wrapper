@@ -110,7 +110,7 @@ class Eagle:
                     name = data.get('name')
                     for name_start_filter in name_start_filters:
                         if not name.startswith(name_start_filter):
-                            return {}
+                            return None
                 except Exception as e:
                     logger.warning(f'[Eagle] {e}')
             return data
@@ -118,14 +118,22 @@ class Eagle:
         logger.debug('[Eagle] Start getting images INFO...')
         st = datetime.datetime.now()
 
+        library = Path(library_path)
+        meta_paths = [
+            meta_path for meta_path in library.glob('**/metadata.json')
+            # The library's own metadata.json (folders, smart folders, ...) is not an image.
+            if meta_path.parent != library
+        ]
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             get_id_job = {
-                executor.submit(load_id, meta_path): meta_path for meta_path in Path(library_path).glob('**/metadata.json')
+                executor.submit(load_id, meta_path): meta_path for meta_path in meta_paths
             }
             for future in concurrent.futures.as_completed(get_id_job):
                 try:
                     data = future.result()
-                    if data is not None:
+                    # Skip images removed by the name filters and files that could not be read.
+                    if data:
                         imgs_info.append(data)
                 except Exception as e:
                     logger.error(e)
@@ -238,6 +246,7 @@ class Eagle:
                 - annotation (str, optional): The annotation for the image.
                 - tags (list, optional): Tags for the image.
                 - modificationTime (int, optional): The creation date of the image.
+                  `modification_time` is accepted as well.
                 - headers (dict, optional): Customize the HTTP headers properties.
             folder_id (str, optional): If the parameter is defined, images will be added to the corresponding folder.
 
@@ -250,11 +259,11 @@ class Eagle:
             item_ = ImageData(
                 url=item['url'],
                 name=item['name'],
-                website=item['website'],
-                tags=item['tags'],
-                annotation=item['annotation'],
-                modificationTime=item['modification_time'],
-                headers=item['headers']
+                website=item.get('website', ''),
+                tags=item.get('tags'),
+                annotation=item.get('annotation', ''),
+                modificationTime=item.get('modificationTime', item.get('modification_time')),
+                headers=item.get('headers')
             ).to_dict()
             items_.append(item_)
 
@@ -326,9 +335,9 @@ class Eagle:
             item_ = ImageData(
                 url=item["path"],
                 name=item["name"],
-                website=item["website"],
-                tags=item["tags"],
-                annotation=item["annotation"]
+                website=item.get("website", ''),
+                tags=item.get("tags"),
+                annotation=item.get("annotation", '')
             ).to_dict()
             item_['path'] = item_['url']
             del item_['url']
