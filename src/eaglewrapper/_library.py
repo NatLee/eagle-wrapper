@@ -12,16 +12,23 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from loguru import logger
 
-def name_filter(prefixes: Optional[Sequence[str]]) -> Callable[[Dict[str, Any]], bool]:
-    """Build the test for ``name_start_filters``: a name has to start with every prefix."""
+MATCH_MODES = {'all': all, 'any': any}
+
+
+def name_filter(prefixes: Optional[Sequence[str]], match: str = 'all') -> Callable[[Dict[str, Any]], bool]:
+    """Build the test for ``name_start_filters``: ``all`` prefixes must match, or ``any`` of them."""
+    if match not in MATCH_MODES:
+        raise ValueError("match must be 'all' or 'any', not {!r}".format(match))
     if isinstance(prefixes, str):
         prefixes = [prefixes]
     prefixes = list(prefixes or [])
     if not prefixes:
         return lambda item: True
+    test = MATCH_MODES[match]
+
     def keep(item: Dict[str, Any]) -> bool:
         name = item.get('name')
-        return isinstance(name, str) and all(name.startswith(prefix) for prefix in prefixes)
+        return isinstance(name, str) and test(name.startswith(prefix) for prefix in prefixes)
     return keep
 
 
@@ -41,13 +48,13 @@ def _load(path: Path) -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) and data else None
 
 
-def read_items(library_path: str, name_start_filters: Optional[Sequence[str]] = None,
-               max_workers: int = 4) -> List[Dict[str, Any]]:
+def read_items(library_path: str, name_start_filters: Optional[Sequence[str]] = None, max_workers: int = 4,
+               match: str = 'all') -> List[Dict[str, Any]]:
     """Load the metadata of every item in a library folder, optionally filtered by name prefix.
 
     Unreadable files are skipped with a warning. Results are in file-system order.
     """
-    keep = name_filter(name_start_filters)
+    keep = name_filter(name_start_filters, match)
     logger.debug('[Eagle] Start getting images INFO...')
     started = datetime.datetime.now()
     paths = item_metadata_paths(library_path)

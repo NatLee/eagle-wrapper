@@ -62,6 +62,16 @@ class TestNameFilter(LibraryFolderTestCase):
         self.assertEqual(self.names(['example', 'ぼ']), [])
         self.assertEqual(self.names(['ex', 'exam']), ['example cat'])
 
+    def test_match_any(self):
+        self.assertEqual(self.names(['example', 'ぼ'], match='any'), ['example cat', 'ぼっち・ざ・ろっく！'])
+
+    def test_match_all_explicitly(self):
+        self.assertEqual(self.names(['example', 'ぼ'], match='all'), [])
+
+    def test_unknown_match_mode(self):
+        with self.assertRaises(ValueError):
+            self.eagle.get_img_info_from_lib_path(self.library, ['a'], match='some')
+
     def test_a_single_string_is_one_prefix(self):
         # 1.1.1 treated every character of the string as a prefix of its own.
         self.assertEqual(self.names('ex'), ['example cat'])

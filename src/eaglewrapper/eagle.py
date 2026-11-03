@@ -176,7 +176,7 @@ class Eagle:
     # =================================================
 
     def get_img_info_from_lib_path(self, library_path: str, name_start_filters: Optional[Sequence[str]] = None,
-                                   max_workers: int = 4) -> List[Dict[str, Any]]:
+                                   max_workers: int = 4, match: str = 'all') -> List[Dict[str, Any]]:
         """
         Get all images' information (metadata) from the path of the source library.
 
@@ -188,14 +188,15 @@ class Eagle:
 
         Args:
             library_path (str): The path of the source library.
-            name_start_filters (list, optional): Name prefixes to filter images by; a name has to start with
-                every one of them. Defaults to no filter.
+            name_start_filters (list, optional): Name prefixes to filter images by. Defaults to no filter.
             max_workers (int, optional): The number of concurrent workers. Defaults to 4.
+            match (str, optional): ``'all'`` (default, as in 1.1.1) keeps an image only if its name starts
+                with every prefix; ``'any'`` keeps it if its name starts with at least one of them.
 
         Returns:
             list: A list of dictionaries containing the metadata of the images.
         """
-        return _library.read_items(library_path, name_start_filters, max_workers)
+        return _library.read_items(library_path, name_start_filters, max_workers, match)
 
     def set_tag_with_id(self, item_id: str, tags: List[str]) -> Optional[Dict[str, Any]]:
         """
