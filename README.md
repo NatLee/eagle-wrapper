@@ -44,6 +44,7 @@ pip install EagleWrapper
 
 Python 3.6 or later. Eagle must be running for everything except the library-folder reader.
 Web API V2, the connection options and the new exceptions arrived in 1.2.0.
+Which release speaks which Eagle API, and what to pin: see [Versioning](#versioning).
 
 ## Quick start
 
@@ -248,6 +249,54 @@ Moving a V1 script to V2 when your Eagle is 4.0 Build 21 or later:
 | `switch_library(path)` / `get_library_icon(path)` | `v2.library.switch(path)` / `v2.library.icon(path)` | |
 | `get_application_info()` | `v2.app.info()` | |
 | `get_thumbnail_path(id)` | none | keep using V1 |
+
+## Versioning
+
+The version number follows Eagle's API. The major number is the Eagle API generation a release is built
+for: 1 for V1, Eagle's original `/api/` API, and 2 for Web API V2 (`/api/v2/`). Minor releases wrap more
+of that API (often what a new Eagle build added) or add options to the package, and patch releases fix bugs.
+Code that works with one release keeps working with later releases that have the same major number.
+One slip from the early days: 1.1.0 renamed two arguments of 1.0.0 and changed what `add_from_url` and
+`set_tag_with_id` return.
+
+Eagle numbers its API only as V1 and V2. Whatever it adds inside a generation is tied to the Eagle build
+that brought it (see the [V1 changelog](https://api.eagle.cool/changelog) and the
+[V2 changelog](https://developer.eagle.cool/web-api/changelog)), so each release says which builds it covers:
+
+| EagleWrapper | Eagle APIs | What it wraps |
+|---|---|---|
+| 1.0.0 (April 2023) | V1 | 3 endpoints (add from URL, list items, update item) and the library-folder reader |
+| 1.1.0, 1.1.1 (April 2023) | V1 | all 21 endpoints documented at the time |
+| 1.2.0 (November 2026) | V1 and Web API V2 | V1 up to its last change (Eagle 3.0 Build 23) plus `/api/library/icon`; V2 up to Eagle 4.0 Build 22 (smart folders, comments) |
+
+1.2.0 is the odd one out. It is the first release that speaks Web API V2, but it came out as 1.2.0, before
+this rule was written down, because nothing changed for code written against V1. Its V1 methods work as
+before; `eagle.v2` is the addition.
+
+The installed package knows what it covers:
+
+```python
+import eaglewrapper
+
+for api in eaglewrapper.SUPPORTED_APIS:
+    print(f'{api.name}: {api.prefix}... needs Eagle {api.since}+, wrapped up to Eagle {api.covered_up_to}')
+```
+
+```text
+V1: /api/... needs Eagle 1.11 Build 21+, wrapped up to Eagle 3.0 Build 23
+Web API V2: /api/v2/... needs Eagle 4.0 Build 21+, wrapped up to Eagle 4.0 Build 22
+```
+
+To see what your Eagle has, `Eagle().get_application_info()` returns its `version` and `buildVersion`,
+and `Eagle().supports_v2()` says whether Web API V2 is there. Endpoints that Eagle adds after the covered
+build are one call away with `eagle.v2.request('GET', 'section/endpoint')`. So are `item/open`,
+`item/select` and `folder/open`: the V2 changelog lists them, but the docs have no page for them yet, so
+they are not wrapped.
+
+What to pin: the major number, e.g. `EagleWrapper~=1.2` (that is `>=1.2, <2`). You get fixes and newly
+wrapped endpoints, and you move to another API generation only when you change the pin. `eagle.v2` needs
+1.2.0 or later. Scripts that only use the V1 methods run on 1.1.0 and later, but 1.2.0 fixes several bugs
+(see [Upgrading from 1.1.1](#upgrading-from-111)).
 
 ## Development
 
