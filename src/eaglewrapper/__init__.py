@@ -4,7 +4,7 @@
 * :class:`EagleV2` - the Web API V2 on its own (Eagle 4.0 Build 21 or later).
 * :mod:`eaglewrapper.errors` - the exceptions.
 """
-__version__ = '1.1.1'
+__version__ = '1.2.0'
 
 from .client import EagleClient
 from .eagle import Eagle, ImageData
