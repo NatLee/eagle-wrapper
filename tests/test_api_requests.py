@@ -5,21 +5,14 @@ the request (method, URL, parameters, JSON body) and how the reply is handled.
 Parameter names follow the Eagle API documentation: https://api.eagle.cool/
 """
 import unittest
-from unittest import mock
 
 import requests
 
 from eaglewrapper import Eagle
 
-HOST = 'http://localhost:41595'
-SUCCESS = {'status': 'success', 'data': {'ok': True}}
-ERROR = {'status': 'error'}
+from .fakes import HOST, MockedHTTP
 
-
-def fake_response(payload):
-    resp = mock.Mock()
-    resp.json.return_value = payload
-    return resp
+ERROR = {'status': 'error'}  # an error reply without a message
 
 
 def sent_url(call):
@@ -28,18 +21,13 @@ def sent_url(call):
     return requests.Request('GET', args[0], params=kwargs.get('params')).prepare().url
 
 
-class EagleRequestTestCase(unittest.TestCase):
+class EagleRequestTestCase(MockedHTTP):
+    # The patch target tests written for 1.1.1 used; it must keep working.
+    patched_requests = 'eaglewrapper.eagle.requests'
 
     def setUp(self):
+        super().setUp()
         self.eagle = Eagle()
-        self.get = mock.patch('eaglewrapper.eagle.requests.get').start()
-        self.post = mock.patch('eaglewrapper.eagle.requests.post').start()
-        self.addCleanup(mock.patch.stopall)
-        self.reply(SUCCESS)
-
-    def reply(self, payload):
-        self.get.return_value = fake_response(payload)
-        self.post.return_value = fake_response(payload)
 
     def assert_get(self, path, params=None):
         self.post.assert_not_called()
