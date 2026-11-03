@@ -367,6 +367,7 @@ How the code is laid out (`src/eaglewrapper/`):
 | `eagle.py` | `Eagle`: the V1 methods, kept compatible with 1.1.1 |
 | `v2.py` | `EagleV2` and its sections (`item`, `folder`, `tag`, ...), plus pagination |
 | `_library.py` | reads `metadata.json` files from a library folder |
+| `_apis.py` | which Eagle APIs and builds this release covers (`SUPPORTED_APIS`); the code, `setup.py` and the README test read it |
 | `errors.py` | the exceptions |
 
 ## Support
