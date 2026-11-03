@@ -58,5 +58,25 @@ class TestNameFilter(LibraryFolderTestCase):
         self.assertEqual(self.names(), ['example cat', 'other', 'ぼっち・ざ・ろっく！'])
 
 
+class TestLibraryMetadata(LibraryFolderTestCase):
+    """The library folder has its own metadata.json (folders, smart folders, ...)."""
+
+    def setUp(self):
+        super().setUp()
+        with open(os.path.join(self.library, 'metadata.json'), 'w', encoding='utf-8') as f:
+            json.dump({'folders': [], 'smartFolders': [], 'quickAccess': [], 'tagsGroups': [],
+                       'modificationTime': 1680000000000, 'applicationVersion': '3.0.0'}, f)
+        self.add_image('A1', 'ぼっち・ざ・ろっく！')
+        self.add_image('B2', 'example cat')
+
+    def test_library_metadata_is_not_an_image(self):
+        result = self.eagle.get_img_info_from_lib_path(self.library)
+        self.assertEqual(sorted(d['id'] for d in result), ['A1', 'B2'])
+
+    def test_library_metadata_is_not_an_image_with_filter(self):
+        result = self.eagle.get_img_info_from_lib_path(self.library, ['ぼ'])
+        self.assertEqual(result, [{'id': 'A1', 'name': 'ぼっち・ざ・ろっく！'}])
+
+
 if __name__ == '__main__':
     unittest.main()

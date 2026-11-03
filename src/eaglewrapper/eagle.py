@@ -118,9 +118,16 @@ class Eagle:
         logger.debug('[Eagle] Start getting images INFO...')
         st = datetime.datetime.now()
 
+        library = Path(library_path)
+        meta_paths = [
+            meta_path for meta_path in library.glob('**/metadata.json')
+            # The library's own metadata.json (folders, smart folders, ...) is not an image.
+            if meta_path.parent != library
+        ]
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             get_id_job = {
-                executor.submit(load_id, meta_path): meta_path for meta_path in Path(library_path).glob('**/metadata.json')
+                executor.submit(load_id, meta_path): meta_path for meta_path in meta_paths
             }
             for future in concurrent.futures.as_completed(get_id_job):
                 try:
