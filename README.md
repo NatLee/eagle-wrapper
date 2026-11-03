@@ -345,9 +345,6 @@ Built on EagleWrapper:
 - [yande-and-konachan-to-eagle](https://github.com/NatLee/yande-and-konachan-to-eagle): fetches images and
   their tags from yande.re and konachan.com and adds them to Eagle with `add_from_url`. A complete,
   small downloader to copy from.
-- [Eagle_Library_For_Web](https://github.com/gitaruurara/Eagle_Library_For_Web): a FastAPI app with a web
-  front end for browsing your Eagle libraries from a browser or phone. It uses `switch_library`,
-  `get_item_info` and `get_thumbnail_path`. README in Japanese.
 
 Built something with EagleWrapper? Open an issue or a pull request and it can go on this list.
 
