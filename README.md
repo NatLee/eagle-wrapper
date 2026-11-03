@@ -194,8 +194,25 @@ These are the methods of 1.1.1, unchanged, plus `star`, `get_library_icon` and `
 | **No API** | `get_img_info_from_lib_path(library_path, name_start_filters, max_workers, match)` | reads the library folder | list |
 | **Helpers** | `supports_v2()` · `check_success(response_or_dict)` | | bool |
 
-`add_from_path` returns Eagle's whole reply, not a bool, because 1.1.1 did. A dict is always truthy, so check
-`eagle.check_success(reply)` (or use `raise_errors=True`) instead of `if eagle.add_from_path(...)`.
+`add_from_path` returns Eagle's whole reply (a dict such as `{'status': 'success'}`), not a bool, because
+1.1.1 did and scripts may read it. A dict is always truthy, so `if eagle.add_from_path(...)` passes even when Eagle
+refused the file. Check the reply, or let failures raise:
+
+```python
+from eaglewrapper import Eagle, EagleAPIError
+
+eagle = Eagle()
+reply = eagle.add_from_path('/path/to/cat.jpg', 'Cat')
+if eagle.check_success(reply):  # True only for {'status': 'success', ...}
+    print('added')
+else:
+    print('Eagle said no:', reply)
+
+try:
+    Eagle(raise_errors=True).add_from_path('/path/to/cat.jpg', 'Cat')
+except EagleAPIError as e:
+    print('Eagle said no:', e.message)
+```
 
 ## Reading a library folder without Eagle
 
