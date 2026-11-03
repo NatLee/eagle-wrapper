@@ -254,7 +254,7 @@ class Eagle:
 
     def add_from_url(self, url: str, name: str, tags: Optional[List[str]] = None, website: str = '',
                      annotation: str = '', modification_time: Optional[int] = None, folder_id: Optional[str] = None,
-                     headers: Optional[Dict[str, str]] = None) -> bool:
+                     headers: Optional[Dict[str, str]] = None, star: Optional[int] = None) -> bool:
         """
         Add a new image or materials from the given URL.
 
@@ -270,6 +270,7 @@ class Eagle:
             folder_id (str, optional): If this parameter is defined, the image will be added to the corresponding folder.
             headers (dict, optional): Customize the HTTP headers properties, this could be used to circumvent the
                 security of certain websites.
+            star (int, optional): Rating from 0 to 5. Only sent when given.
 
         Returns:
             bool: True if Eagle accepted the image.
@@ -281,6 +282,8 @@ class Eagle:
                          modificationTime=modification_time, headers=headers).to_dict()
         if folder_id is not None:
             data['folderId'] = folder_id
+        if star is not None:
+            data['star'] = star
         return self._ok('POST', '/api/item/addFromURL', body=data)
 
     def add_from_urls(self, items: List[Dict[str, Any]], folder_id: Optional[str] = None) -> bool:
@@ -676,3 +679,21 @@ class Eagle:
             bool: True if Eagle switched to the library.
         """
         return self._ok('POST', '/api/library/switch', body={"libraryPath": library_path})
+
+    def get_library_icon(self, library_path: str) -> Optional[bytes]:
+        """
+        Get the icon image of a library.
+
+        API DOC: https://api.eagle.cool/library/icon
+
+        Args:
+            library_path (str): The path of the library.
+
+        Returns:
+            bytes: The image data, or None if Eagle reported a failure.
+        """
+        try:
+            return self._client.binary('/api/library/icon', {'libraryPath': library_path})
+        except EagleAPIError as e:
+            self._failed('/api/library/icon', e.payload, e.status_code)
+            return None
