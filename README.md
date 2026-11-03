@@ -43,11 +43,7 @@ pip install EagleWrapper
 ```
 
 Python 3.6 or later. Eagle must be running for everything except the library-folder reader.
-
-> **Note**
-> The Web API V2 support, the connection options and the new exceptions are on `main` but not on PyPI yet:
-> the latest release, 1.1.1, has only the V1 methods. Until the next release, install from GitHub:
-> `pip install "git+https://github.com/NatLee/eagle-wrapper"`
+Web API V2, the connection options and the new exceptions arrived in 1.2.0.
 
 ## Quick start
 
