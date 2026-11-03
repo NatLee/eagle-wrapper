@@ -57,6 +57,40 @@ class TestNameFilter(LibraryFolderTestCase):
             f.write('{not json')
         self.assertEqual(self.names(), ['example cat', 'other', 'ぼっち・ざ・ろっく！'])
 
+    def test_several_filters_must_all_match_by_default(self):
+        # The 1.1.1 behaviour: a name has to start with every prefix.
+        self.assertEqual(self.names(['example', 'ぼ']), [])
+        self.assertEqual(self.names(['ex', 'exam']), ['example cat'])
+
+    def test_match_any(self):
+        self.assertEqual(self.names(['example', 'ぼ'], match='any'), ['example cat', 'ぼっち・ざ・ろっく！'])
+
+    def test_match_all_explicitly(self):
+        self.assertEqual(self.names(['example', 'ぼ'], match='all'), [])
+
+    def test_unknown_match_mode(self):
+        with self.assertRaises(ValueError):
+            self.eagle.get_img_info_from_lib_path(self.library, ['a'], match='some')
+
+    def test_a_single_string_is_one_prefix(self):
+        # 1.1.1 treated every character of the string as a prefix of its own.
+        self.assertEqual(self.names('ex'), ['example cat'])
+
+    def test_positional_max_workers(self):
+        self.assertEqual(self.names(['o'], 1), ['other'])
+
+    def test_item_without_a_name_does_not_pass_a_name_filter(self):
+        folder = os.path.join(self.library, 'images', 'E5.info')
+        os.makedirs(folder)
+        with open(os.path.join(folder, 'metadata.json'), 'w', encoding='utf-8') as f:
+            json.dump({'id': 'E5'}, f)
+        result = self.eagle.get_img_info_from_lib_path(self.library, ['o'])
+        self.assertEqual([d['id'] for d in result], ['C3'])
+        self.assertIn('E5', [d['id'] for d in self.eagle.get_img_info_from_lib_path(self.library)])
+
+    def test_missing_library_folder_gives_empty_list(self):
+        self.assertEqual(self.eagle.get_img_info_from_lib_path(os.path.join(self.tmp, 'nope.library')), [])
+
 
 class TestLibraryMetadata(LibraryFolderTestCase):
     """The library folder has its own metadata.json (folders, smart folders, ...)."""
