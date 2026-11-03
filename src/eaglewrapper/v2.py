@@ -23,10 +23,13 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 import requests
 
 from ._apis import API_V2, api_for_path
-from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params
+from .client import DEFAULT_BASE_URL, EagleClient, Params
 
 MAX_LIMIT = 1000
 """The largest ``limit`` Eagle accepts on list endpoints."""
+
+DEFAULT_PAGE_SIZE = 200
+"""How many rows the ``iterate`` methods fetch per request (Eagle itself defaults to 50)."""
 
 ICON_COLORS = ('red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'pink')
 """The folder and smart-folder icon colors Eagle accepts."""
@@ -53,7 +56,7 @@ def _rows(page: Any) -> Tuple[List[Any], Optional[int]]:
     return [], None
 
 
-def _paginate(fetch: Callable[..., Any], offset: int = 0, page_size: int = 200) -> Iterator[Any]:
+def _paginate(fetch: Callable[..., Any], offset: int = 0, page_size: int = DEFAULT_PAGE_SIZE) -> Iterator[Any]:
     """Yield every row of a paginated endpoint, one page of ``page_size`` at a time."""
     if not 1 <= page_size <= MAX_LIMIT:
         raise ValueError('page_size must be between 1 and {}, not {!r}'.format(MAX_LIMIT, page_size))
@@ -136,7 +139,7 @@ class ItemAPI(_Section):
             'smartFolders': _list(smart_folders), 'ext': ext, 'annotation': annotation, 'rating': rating,
             'url': url, 'shape': shape, 'fields': _list(fields), 'offset': offset, 'limit': limit})
 
-    def iterate(self, page_size: int = 200, offset: int = 0, **filters: Any) -> Iterator[Item]:
+    def iterate(self, page_size: int = DEFAULT_PAGE_SIZE, offset: int = 0, **filters: Any) -> Iterator[Item]:
         """Yield every item matching the filters of :meth:`get`, fetching ``page_size`` at a time."""
         return _paginate(lambda **page: self.get(**dict(filters, **page)), offset, page_size)
 
@@ -161,7 +164,7 @@ class ItemAPI(_Section):
         """
         return self._post('query', {'query': query, 'offset': offset, 'limit': limit})
 
-    def iterate_query(self, query: str, page_size: int = 200, offset: int = 0) -> Iterator[Item]:
+    def iterate_query(self, query: str, page_size: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Iterator[Item]:
         """Yield every item that matches a full-text :meth:`query`."""
         return _paginate(lambda **page: self.query(query, **page), offset, page_size)
 
@@ -303,7 +306,7 @@ class FolderAPI(_Section):
         return self._post('get', {'id': folder_id, 'ids': _list(folder_ids), 'isSelected': is_selected,
                                   'isRecent': is_recent, 'offset': offset, 'limit': limit})
 
-    def iterate(self, page_size: int = 200, offset: int = 0, **filters: Any) -> Iterator[Dict[str, Any]]:
+    def iterate(self, page_size: int = DEFAULT_PAGE_SIZE, offset: int = 0, **filters: Any) -> Iterator[Dict[str, Any]]:
         """Yield every folder matching the filters of :meth:`get`."""
         return _paginate(lambda **page: self.get(**dict(filters, **page)), offset, page_size)
 
@@ -400,7 +403,8 @@ class TagAPI(_Section):
         """List tags, optionally only those whose name contains ``name`` (``POST /api/v2/tag/get``)."""
         return self._post('get', {'name': name, 'offset': offset, 'limit': limit})
 
-    def iterate(self, name: Optional[str] = None, page_size: int = 200, offset: int = 0) -> Iterator[Dict[str, Any]]:
+    def iterate(self, name: Optional[str] = None, page_size: int = DEFAULT_PAGE_SIZE,
+                offset: int = 0) -> Iterator[Dict[str, Any]]:
         """Yield every tag (whose name contains ``name``, if given)."""
         return _paginate(lambda **page: self.get(name=name, **page), offset, page_size)
 
@@ -581,7 +585,7 @@ class EagleV2:
         item, folder, smart_folder, tag, tag_group, library, app, ai_search: The endpoint groups.
     """
 
-    def __init__(self, base_url: str = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT), *,
+    def __init__(self, base_url: str = DEFAULT_BASE_URL, *,
                  token: Optional[str] = None, timeout: Optional[float] = None,
                  session: Optional[requests.Session] = None, client: Optional[EagleClient] = None):
         self._client = client or EagleClient(base_url, token=token, timeout=timeout, session=session)

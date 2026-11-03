@@ -16,7 +16,9 @@ from .errors import EagleAPIError, EagleConnectionError, EagleResponseError
 
 DEFAULT_HOST = 'http://localhost'
 DEFAULT_PORT = 41595
+DEFAULT_BASE_URL = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT)
 TOKEN_ENV_VAR = 'EAGLE_API_TOKEN'
+REPLY_TEXT_KEPT = 200  # characters of a non-JSON reply kept on EagleResponseError.text
 
 Params = Optional[Dict[str, Any]]
 
@@ -53,7 +55,7 @@ class EagleClient:
             ``requests.get``/``requests.post``.
     """
 
-    def __init__(self, base_url: str = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT), token: Optional[str] = None,
+    def __init__(self, base_url: str = DEFAULT_BASE_URL, token: Optional[str] = None,
                  timeout: Optional[float] = None, session: Optional[requests.Session] = None):
         if token is None:
             token = os.environ.get(TOKEN_ENV_VAR) or None
@@ -148,4 +150,4 @@ class EagleClient:
             raise EagleResponseError(
                 'Eagle answered {} with something that is not JSON (HTTP {}).{}'.format(path, status_code, hint),
                 endpoint=path, status_code=status_code,
-                text=text[:200] if isinstance(text, str) else None) from exc
+                text=text[:REPLY_TEXT_KEPT] if isinstance(text, str) else None) from exc
