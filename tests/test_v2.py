@@ -3,6 +3,7 @@
 Endpoints, parameter names and reply shapes follow the official V2 docs:
 https://developer.eagle.cool/web-api  (Eagle 4.0 Build 21+; smart folders and comments Build 22+)
 """
+import inspect
 import os
 import unittest
 
@@ -417,6 +418,19 @@ class TestSupportsV2(MockedHTTP):
         self.get.side_effect = requests.exceptions.ConnectionError('refused')
         with self.assertRaises(EagleConnectionError):
             Eagle().supports_v2()
+
+
+class TestDefaults(unittest.TestCase):
+    """The defaults 1.2.0 shipped: Eagle's local address and 200 rows per page for the iterate methods."""
+
+    def test_default_address(self):
+        self.assertEqual(repr(EagleV2()), "EagleV2('http://localhost:41595')")
+
+    def test_every_iterate_method_fetches_200_rows_per_page(self):
+        v2 = EagleV2()
+        for method in (v2.item.iterate, v2.item.iterate_query, v2.folder.iterate, v2.tag.iterate):
+            with self.subTest(method=method.__qualname__):
+                self.assertEqual(inspect.signature(method).parameters['page_size'].default, 200)
 
 
 if __name__ == '__main__':

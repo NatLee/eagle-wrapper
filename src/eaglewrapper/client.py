@@ -11,13 +11,21 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
+from ._apis import api_for_path
 from .errors import EagleAPIError, EagleConnectionError, EagleResponseError
 
 DEFAULT_HOST = 'http://localhost'
 DEFAULT_PORT = 41595
+DEFAULT_BASE_URL = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT)
 TOKEN_ENV_VAR = 'EAGLE_API_TOKEN'
+REPLY_TEXT_KEPT = 200  # characters of a non-JSON reply kept on EagleResponseError.text
 
 Params = Optional[Dict[str, Any]]
+
+
+def compact(**fields: Any) -> Dict[str, Any]:
+    """The given request fields without the ones that are ``None`` (= not set), in the given order."""
+    return {key: value for key, value in fields.items() if value is not None}
 
 
 def is_success(payload: Any) -> bool:
@@ -52,7 +60,7 @@ class EagleClient:
             ``requests.get``/``requests.post``.
     """
 
-    def __init__(self, base_url: str = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT), token: Optional[str] = None,
+    def __init__(self, base_url: str = DEFAULT_BASE_URL, token: Optional[str] = None,
                  timeout: Optional[float] = None, session: Optional[requests.Session] = None):
         if token is None:
             token = os.environ.get(TOKEN_ENV_VAR) or None
@@ -142,8 +150,9 @@ class EagleClient:
             return resp.json(), status_code
         except ValueError as exc:
             text = getattr(resp, 'text', None)
+            api = api_for_path(path)
+            hint = ' {} needs Eagle {} or later.'.format(api.name, api.since) if api else ''
             raise EagleResponseError(
-                'Eagle answered {} with something that is not JSON (HTTP {}). If this is a V2 endpoint, '
-                'Eagle may be older than 4.0 Build 21.'.format(path, status_code),
+                'Eagle answered {} with something that is not JSON (HTTP {}).{}'.format(path, status_code, hint),
                 endpoint=path, status_code=status_code,
-                text=text[:200] if isinstance(text, str) else None) from exc
+                text=text[:REPLY_TEXT_KEPT] if isinstance(text, str) else None) from exc

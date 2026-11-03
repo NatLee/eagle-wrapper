@@ -22,10 +22,14 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 
 import requests
 
-from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params
+from ._apis import API_V2, api_for_path
+from .client import DEFAULT_BASE_URL, EagleClient, Params, compact
 
 MAX_LIMIT = 1000
 """The largest ``limit`` Eagle accepts on list endpoints."""
+
+DEFAULT_PAGE_SIZE = 200
+"""How many rows the ``iterate`` methods fetch per request (Eagle itself defaults to 50)."""
 
 ICON_COLORS = ('red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'pink')
 """The folder and smart-folder icon colors Eagle accepts."""
@@ -35,11 +39,6 @@ SHAPES = ('square', 'portrait', 'panoramic-portrait', 'landscape', 'panoramic-la
 
 Item = Dict[str, Any]
 Page = Dict[str, Any]
-
-
-def _compact(**fields: Any) -> Dict[str, Any]:
-    """The given fields without the ones that are ``None`` (= not set)."""
-    return {key: value for key, value in fields.items() if value is not None}
 
 
 def _rows(page: Any) -> Tuple[List[Any], Optional[int]]:
@@ -52,7 +51,7 @@ def _rows(page: Any) -> Tuple[List[Any], Optional[int]]:
     return [], None
 
 
-def _paginate(fetch: Callable[..., Any], offset: int = 0, page_size: int = 200) -> Iterator[Any]:
+def _paginate(fetch: Callable[..., Any], offset: int = 0, page_size: int = DEFAULT_PAGE_SIZE) -> Iterator[Any]:
     """Yield every row of a paginated endpoint, one page of ``page_size`` at a time."""
     if not 1 <= page_size <= MAX_LIMIT:
         raise ValueError('page_size must be between 1 and {}, not {!r}'.format(MAX_LIMIT, page_size))
@@ -79,14 +78,17 @@ class _Section:
         self._client = client
 
     def __repr__(self) -> str:
-        return '<{} {}/api/v2/{}/>'.format(type(self).__name__, self._client.base_url, self._prefix)
+        return '<{} {}{}>'.format(type(self).__name__, self._client.base_url, self._path())
+
+    def _path(self, action: str = '') -> str:
+        """The full path of one endpoint of this group, e.g. ``/api/v2/item/get``."""
+        return API_V2.path('{}/{}'.format(self._prefix, action))
 
     def _get(self, action: str, params: Params = None) -> Any:
-        return self._client.data('GET', '/api/v2/{}/{}'.format(self._prefix, action), _compact(**(params or {})))
+        return self._client.data('GET', self._path(action), compact(**(params or {})))
 
     def _post(self, action: str, body: Optional[Dict[str, Any]] = None) -> Any:
-        return self._client.data('POST', '/api/v2/{}/{}'.format(self._prefix, action), None,
-                                 _compact(**(body or {})))
+        return self._client.data('POST', self._path(action), None, compact(**(body or {})))
 
 
 class ItemAPI(_Section):
@@ -132,7 +134,7 @@ class ItemAPI(_Section):
             'smartFolders': _list(smart_folders), 'ext': ext, 'annotation': annotation, 'rating': rating,
             'url': url, 'shape': shape, 'fields': _list(fields), 'offset': offset, 'limit': limit})
 
-    def iterate(self, page_size: int = 200, offset: int = 0, **filters: Any) -> Iterator[Item]:
+    def iterate(self, page_size: int = DEFAULT_PAGE_SIZE, offset: int = 0, **filters: Any) -> Iterator[Item]:
         """Yield every item matching the filters of :meth:`get`, fetching ``page_size`` at a time."""
         return _paginate(lambda **page: self.get(**dict(filters, **page)), offset, page_size)
 
@@ -157,7 +159,7 @@ class ItemAPI(_Section):
         """
         return self._post('query', {'query': query, 'offset': offset, 'limit': limit})
 
-    def iterate_query(self, query: str, page_size: int = 200, offset: int = 0) -> Iterator[Item]:
+    def iterate_query(self, query: str, page_size: int = DEFAULT_PAGE_SIZE, offset: int = 0) -> Iterator[Item]:
         """Yield every item that matches a full-text :meth:`query`."""
         return _paginate(lambda **page: self.query(query, **page), offset, page_size)
 
@@ -189,7 +191,7 @@ class ItemAPI(_Section):
         Raises:
             ValueError: Not exactly one of ``url``, ``path``, ``base64`` and ``bookmark_url`` was given.
         """
-        sources = _compact(url=url, path=path, base64=base64, bookmarkURL=bookmark_url)
+        sources = compact(url=url, path=path, base64=base64, bookmarkURL=bookmark_url)
         if len(sources) != 1:
             raise ValueError('Give exactly one of url, path, base64 or bookmark_url (got {}).'.format(
                 ', '.join(sorted(sources)) or 'none'))
@@ -212,7 +214,7 @@ class ItemAPI(_Section):
         items = list(items)
         if not 1 <= len(items) <= MAX_LIMIT:
             raise ValueError('add_many takes 1 to {} items, not {}.'.format(MAX_LIMIT, len(items)))
-        data = self._client.data('POST', '/api/v2/item/add', None, {'items': items})
+        data = self._post('add', {'items': items})
         return list(data.get('ids') or []) if isinstance(data, dict) else list(data or [])
 
     def update(self, item_id: str, *, name: Optional[str] = None, tags: Optional[Sequence[str]] = None,
@@ -258,7 +260,7 @@ class ItemAPI(_Section):
         Raises:
             ValueError: Neither or both kinds of position were given, or the area is incomplete.
         """
-        rect = _compact(x=x, y=y, width=width, height=height)
+        rect = compact(x=x, y=y, width=width, height=height)
         if duration is not None and rect:
             raise ValueError('Give either duration (video) or x, y, width and height (image), not both.')
         if duration is None and len(rect) != 4:
@@ -272,7 +274,7 @@ class ItemAPI(_Section):
 
         Image comments can only move their area and video comments only their ``duration``.
         """
-        rect = _compact(x=x, y=y, width=width, height=height)
+        rect = compact(x=x, y=y, width=width, height=height)
         if duration is not None and rect:
             raise ValueError('A comment is either on an image area or on a video moment, not both.')
         return self._post('updateComment', dict(rect, id=item_id, commentId=comment_id, annotation=annotation,
@@ -299,7 +301,7 @@ class FolderAPI(_Section):
         return self._post('get', {'id': folder_id, 'ids': _list(folder_ids), 'isSelected': is_selected,
                                   'isRecent': is_recent, 'offset': offset, 'limit': limit})
 
-    def iterate(self, page_size: int = 200, offset: int = 0, **filters: Any) -> Iterator[Dict[str, Any]]:
+    def iterate(self, page_size: int = DEFAULT_PAGE_SIZE, offset: int = 0, **filters: Any) -> Iterator[Dict[str, Any]]:
         """Yield every folder matching the filters of :meth:`get`."""
         return _paginate(lambda **page: self.get(**dict(filters, **page)), offset, page_size)
 
@@ -333,10 +335,10 @@ class FolderAPI(_Section):
             raise ValueError('Give either parent or move_to_root, not both.')
         body = {'id': folder_id, 'name': name, 'description': description, 'tags': _list(tags),
                 'iconColor': icon_color, 'parent': parent}
-        body = _compact(**body)
+        body = compact(**body)
         if move_to_root:
             body['parent'] = None  # Eagle's way of saying "top level"
-        return self._client.data('POST', '/api/v2/folder/update', None, body)
+        return self._client.data('POST', self._path('update'), None, body)
 
 
 class SmartFolderAPI(_Section):
@@ -396,7 +398,8 @@ class TagAPI(_Section):
         """List tags, optionally only those whose name contains ``name`` (``POST /api/v2/tag/get``)."""
         return self._post('get', {'name': name, 'offset': offset, 'limit': limit})
 
-    def iterate(self, name: Optional[str] = None, page_size: int = 200, offset: int = 0) -> Iterator[Dict[str, Any]]:
+    def iterate(self, name: Optional[str] = None, page_size: int = DEFAULT_PAGE_SIZE,
+                offset: int = 0) -> Iterator[Dict[str, Any]]:
         """Yield every tag (whose name contains ``name``, if given)."""
         return _paginate(lambda **page: self.get(name=name, **page), offset, page_size)
 
@@ -480,7 +483,7 @@ class LibraryAPI(_Section):
 
     def icon(self, library_path: str) -> bytes:
         """A library's icon image (``GET /api/v2/library/icon``)."""
-        return self._client.binary('/api/v2/library/icon', {'libraryPath': library_path})
+        return self._client.binary(self._path('icon'), {'libraryPath': library_path})
 
 
 class AppAPI(_Section):
@@ -555,10 +558,8 @@ def _list(values: Optional[Sequence[Any]]) -> Optional[List[Any]]:
 
 
 def _options(limit: Optional[int], options: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    merged = dict(options or {})
-    if limit is not None:
-        merged['limit'] = limit
-    return merged or None
+    """The AI search ``options``, with ``limit`` merged in; ``None`` (not sent) when empty."""
+    return dict(options or {}, **compact(limit=limit)) or None
 
 
 class EagleV2:
@@ -577,7 +578,7 @@ class EagleV2:
         item, folder, smart_folder, tag, tag_group, library, app, ai_search: The endpoint groups.
     """
 
-    def __init__(self, base_url: str = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT), *,
+    def __init__(self, base_url: str = DEFAULT_BASE_URL, *,
                  token: Optional[str] = None, timeout: Optional[float] = None,
                  session: Optional[requests.Session] = None, client: Optional[EagleClient] = None):
         self._client = client or EagleClient(base_url, token=token, timeout=timeout, session=session)
@@ -608,8 +609,8 @@ class EagleV2:
         method = method.upper()
         if method not in ('GET', 'POST'):
             raise ValueError("method must be 'GET' or 'POST', not {!r}".format(method))
-        if not path.startswith('/api/'):
-            path = '/api/v2/' + path.lstrip('/')
+        if api_for_path(path) is None:
+            path = API_V2.path(path)
         if method == 'POST' and body is None:
             body = {}
         return self._client.data(method, path, params, body)

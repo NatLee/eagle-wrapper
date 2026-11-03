@@ -1,23 +1,36 @@
+import os
+import runpy
+
 import setuptools
 
-with open('README.md', 'r', encoding='utf-8') as fh:
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+with open(os.path.join(HERE, 'README.md'), 'r', encoding='utf-8') as fh:
     long_description = fh.read()
+
+# The Eagle APIs this release speaks (names, docs links) come from the package itself.
+# The file is loaded on its own because importing the package would need its dependencies.
+APIS = runpy.run_path(os.path.join(HERE, 'src', 'eaglewrapper', '_apis.py'))
+API_V1, API_V2 = APIS['API_V1'], APIS['API_V2']
+
+REPO = 'https://github.com/NatLee/eagle-wrapper'
 
 setuptools.setup(
     name='EagleWrapper',
     author='Nat Lee',
     author_email='natlee.work@gmail.com',
-    description='A wrapper for the local HTTP API (V1 and Web API V2) of Eagle, an image management app.',
+    description='A wrapper for the local HTTP API ({}) of Eagle, an image management app.'.format(
+        ' and '.join(api.name for api in APIS['SUPPORTED_APIS'])),
     keywords='eagle, eagle api, eagle web api, image management, asset management, wrapper',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/NatLee/eagle-wrapper',
+    url=REPO,
     project_urls={
-        'Documentation': 'https://github.com/NatLee/eagle-wrapper',
-        'Bug Reports': 'https://github.com/NatLee/eagle-wrapper/issues',
-        'Source Code': 'https://github.com/NatLee/eagle-wrapper',
-        'Official API Documentation': 'https://api.eagle.cool/',
-        'Eagle Web API V2': 'https://developer.eagle.cool/web-api',
+        'Documentation': REPO,
+        'Bug Reports': REPO + '/issues',
+        'Source Code': REPO,
+        'Official API Documentation': API_V1.docs,
+        'Eagle Web API V2': API_V2.docs,
         # 'Funding': '',
         # 'Say Thanks!': '',
     },
@@ -29,7 +42,8 @@ setuptools.setup(
         'Development Status :: 5 - Production/Stable',
 
         'Intended Audience :: Developers',
-        'Topic :: Software Development :: Build Tools',
+        'Topic :: Multimedia :: Graphics',
+        'Topic :: Software Development :: Libraries :: Python Modules',
 
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
@@ -49,10 +63,5 @@ setuptools.setup(
     install_requires=['requests', 'loguru'],
     extras_require={
         'dev': ['check-manifest'],
-        # 'test': ['coverage'],
     },
-    entry_points={
-        'console_scripts': [
-        ]
-    }
 )

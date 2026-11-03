@@ -25,13 +25,16 @@ def fake_response(payload=None, status_code=200, content=b'', content_type='appl
 class MockedHTTP(unittest.TestCase):
     """Replaces requests.get/post, and clears EAGLE_API_TOKEN, for each test."""
 
+    #: Where requests.get/post are patched. Both names point at the same requests module.
+    patched_requests = 'eaglewrapper.client.requests'
+
     def setUp(self):
         env = mock.patch.dict(os.environ)
         env.start()
         self.addCleanup(env.stop)
         os.environ.pop('EAGLE_API_TOKEN', None)
-        self.get = mock.patch('eaglewrapper.client.requests.get').start()
-        self.post = mock.patch('eaglewrapper.client.requests.post').start()
+        self.get = mock.patch(self.patched_requests + '.get').start()
+        self.post = mock.patch(self.patched_requests + '.post').start()
         self.addCleanup(mock.patch.stopall)
         self.reply(SUCCESS)
 

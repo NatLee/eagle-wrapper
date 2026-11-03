@@ -44,6 +44,7 @@ pip install EagleWrapper
 
 Python 3.6 or later. Eagle must be running for everything except the library-folder reader.
 Web API V2, the connection options and the new exceptions arrived in 1.2.0.
+Which release speaks which Eagle API, and what to pin: see [Versioning](#versioning).
 
 ## Quick start
 
@@ -193,8 +194,25 @@ These are the methods of 1.1.1, unchanged, plus `star`, `get_library_icon` and `
 | **No API** | `get_img_info_from_lib_path(library_path, name_start_filters, max_workers, match)` | reads the library folder | list |
 | **Helpers** | `supports_v2()` · `check_success(response_or_dict)` | | bool |
 
-`add_from_path` returns Eagle's whole reply, not a bool, because 1.1.1 did. A dict is always truthy, so check
-`eagle.check_success(reply)` (or use `raise_errors=True`) instead of `if eagle.add_from_path(...)`.
+`add_from_path` returns Eagle's whole reply (a dict such as `{'status': 'success'}`), not a bool, because
+1.1.1 did and scripts may read it. A dict is always truthy, so `if eagle.add_from_path(...)` passes even when Eagle
+refused the file. Check the reply, or let failures raise:
+
+```python
+from eaglewrapper import Eagle, EagleAPIError
+
+eagle = Eagle()
+reply = eagle.add_from_path('/path/to/cat.jpg', 'Cat')
+if eagle.check_success(reply):  # True only for {'status': 'success', ...}
+    print('added')
+else:
+    print('Eagle said no:', reply)
+
+try:
+    Eagle(raise_errors=True).add_from_path('/path/to/cat.jpg', 'Cat')
+except EagleAPIError as e:
+    print('Eagle said no:', e.message)
+```
 
 ## Reading a library folder without Eagle
 
@@ -249,6 +267,86 @@ Moving a V1 script to V2 when your Eagle is 4.0 Build 21 or later:
 | `get_application_info()` | `v2.app.info()` | |
 | `get_thumbnail_path(id)` | none | keep using V1 |
 
+## Versioning
+
+The version number follows Eagle's API. The major number is the Eagle API generation a release is built
+for: 1 for V1, Eagle's original `/api/` API, and 2 for Web API V2 (`/api/v2/`). Minor releases wrap more
+of that API (often what a new Eagle build added) or add options to the package, and patch releases fix bugs.
+Code that works with one release keeps working with later releases that have the same major number.
+One slip from the early days: 1.1.0 renamed two arguments of 1.0.0 and changed what `add_from_url` and
+`set_tag_with_id` return.
+
+Eagle numbers its API only as V1 and V2. Whatever it adds inside a generation is tied to the Eagle build
+that brought it (see the [V1 changelog](https://api.eagle.cool/changelog) and the
+[V2 changelog](https://developer.eagle.cool/web-api/changelog)), so each release says which builds it covers:
+
+| EagleWrapper | Eagle APIs | What it wraps |
+|---|---|---|
+| 1.0.0 (April 2023) | V1 | 3 endpoints (add from URL, list items, update item) and the library-folder reader |
+| 1.1.0, 1.1.1 (April 2023) | V1 | all 21 endpoints documented at the time |
+| 1.2.0 (November 2026) | V1 and Web API V2 | V1 up to its last change (Eagle 3.0 Build 23) plus `/api/library/icon`; V2 up to Eagle 4.0 Build 22 (smart folders, comments) |
+
+1.2.0 is the odd one out. It is the first release that speaks Web API V2, but it came out as 1.2.0, before
+this rule was written down, because nothing changed for code written against V1. Its V1 methods work as
+before; `eagle.v2` is the addition.
+
+The installed package knows what it covers:
+
+```python
+import eaglewrapper
+
+for api in eaglewrapper.SUPPORTED_APIS:
+    print(f'{api.name}: {api.prefix}... needs Eagle {api.since}+, wrapped up to Eagle {api.covered_up_to}')
+```
+
+```text
+V1: /api/... needs Eagle 1.11 Build 21+, wrapped up to Eagle 3.0 Build 23
+Web API V2: /api/v2/... needs Eagle 4.0 Build 21+, wrapped up to Eagle 4.0 Build 22
+```
+
+To see what your Eagle has, `Eagle().get_application_info()` returns its `version` and `buildVersion`,
+and `Eagle().supports_v2()` says whether Web API V2 is there. Endpoints that Eagle adds after the covered
+build are one call away with `eagle.v2.request('GET', 'section/endpoint')`. So are `item/open`,
+`item/select` and `folder/open`: the V2 changelog lists them, but the docs have no page for them yet, so
+they are not wrapped.
+
+What to pin: the major number, e.g. `EagleWrapper~=1.2` (that is `>=1.2, <2`). You get fixes and newly
+wrapped endpoints, and you move to another API generation only when you change the pin. `eagle.v2` needs
+1.2.0 or later. Scripts that only use the V1 methods run on 1.1.0 and later, but 1.2.0 fixes several bugs
+(see [Upgrading from 1.1.1](#upgrading-from-111)).
+
+## Plugins and related projects
+
+Not every job needs a script. A few things worth knowing about before you write one:
+
+From Eagle:
+
+- [Plugin Center](https://community-en.eagle.cool/plugins): plugins you install inside Eagle. The batch job
+  you are about to script may already exist as one.
+- [API Playground](https://developer.eagle.cool/web-api/get-started/playground): with Eagle open, visit
+  `http://localhost:41595/api/v2/playground` to try any Web API V2 endpoint from a form and see Eagle's real
+  reply before you write the Python call. It works on your real library, so writes there are real too.
+- [Plugin API](https://developer.eagle.cool/plugin-api) and the
+  [official plugin examples](https://github.com/eagle-app/eagle-plugin-examples): for code that should run
+  inside Eagle (a window, a background service, support for a new file format, an inspector panel) rather
+  than talk to it from outside. The examples have one small working plugin per type.
+- [AI Search](https://eagle.cool/support/article/ai-search): Eagle's offline search by description or by
+  similar image. `eagle.v2.ai_search` only works with this plugin installed.
+- [Eagle Skill / MCP](https://en.eagle.cool/blog/post/eagle-plugin-mcp-skill): lets an AI agent clean up
+  tags, plan folders and rewrite names and descriptions in your library. Worth a look when the hard part is
+  deciding what to change, not making the calls.
+
+Built on EagleWrapper:
+
+- [yande-and-konachan-to-eagle](https://github.com/NatLee/yande-and-konachan-to-eagle): fetches images and
+  their tags from yande.re and konachan.com and adds them to Eagle with `add_from_url`. A complete,
+  small downloader to copy from.
+- [Eagle_Library_For_Web](https://github.com/gitaruurara/Eagle_Library_For_Web): a FastAPI app with a web
+  front end for browsing your Eagle libraries from a browser or phone. It uses `switch_library`,
+  `get_item_info` and `get_thumbnail_path`. README in Japanese.
+
+Built something with EagleWrapper? Open an issue or a pull request and it can go on this list.
+
 ## Development
 
 The tests replace the HTTP calls with mocks, so Eagle does not need to be running.
@@ -269,7 +367,16 @@ How the code is laid out (`src/eaglewrapper/`):
 | `eagle.py` | `Eagle`: the V1 methods, kept compatible with 1.1.1 |
 | `v2.py` | `EagleV2` and its sections (`item`, `folder`, `tag`, ...), plus pagination |
 | `_library.py` | reads `metadata.json` files from a library folder |
+| `_apis.py` | which Eagle APIs and builds this release covers (`SUPPORTED_APIS`); the code, `setup.py` and the README test read it |
 | `errors.py` | the exceptions |
+
+## Support
+
+EagleWrapper is free and kept up in spare time. If it saved you an afternoon, you can buy me a coffee on
+Ko-fi or chip in on Liberapay. Bug reports and pull requests help just as much.
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-natlee__-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/natlee_)
+[![Liberapay](https://img.shields.io/badge/Liberapay-natlee-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/natlee)
 
 ## Contributor
 
