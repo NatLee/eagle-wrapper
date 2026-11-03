@@ -3,6 +3,7 @@ include *.md
 include *.sh
 include *.bat
 include LICENSE
+include src/eaglewrapper/py.typed
 recursive-include test *.py
 recursive-include tests *.py
 recursive-include doc *.png
