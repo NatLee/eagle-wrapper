@@ -227,6 +227,11 @@ class TestItem(EagleRequestTestCase):
             'limit': 5, 'offset': 1, 'orderBy': '-FILESIZE', 'keyword': 'cat', 'ext': 'png',
             'tags': 'a,b', 'folders': 'F1,F2'})
 
+    def test_list_items_leaves_out_empty_filters(self):
+        # 1.1.1 skipped '' and [] as well as None; that must not change.
+        self.eagle.list_items(order_by='', keyword='', ext='', tags=[], folders=[])
+        self.assert_get('/api/item/list', {'limit': 200, 'offset': 0})
+
     def test_move_to_trash(self):
         self.assertIs(self.eagle.move_to_trash(['I1', 'I2']), True)
         self.assert_post('/api/item/moveToTrash', {'itemIds': ['I1', 'I2']})

@@ -15,7 +15,7 @@ from loguru import logger
 
 from . import _library
 from ._apis import API_V2
-from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params, error_message, is_success
+from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params, compact, error_message, is_success
 from .errors import EagleAPIError, EagleResponseError
 from .v2 import EagleV2
 
@@ -303,10 +303,7 @@ class Eagle:
         """
         data = ImageData(url=url, name=name, website=website, tags=tags, annotation=annotation,
                          modificationTime=modification_time, headers=headers).to_dict()
-        if folder_id is not None:
-            data['folderId'] = folder_id
-        if star is not None:
-            data['star'] = star
+        data.update(compact(folderId=folder_id, star=star))
         return self._ok('POST', '/api/item/addFromURL', body=data)
 
     def add_from_urls(self, items: List[Dict[str, Any]], folder_id: Optional[str] = None) -> bool:
@@ -341,9 +338,7 @@ class Eagle:
                 headers=item.get('headers'),
             ).to_dict()
             for item in items
-        ]}  # type: Dict[str, Any]
-        if folder_id is not None:
-            data['folderId'] = folder_id
+        ], **compact(folderId=folder_id)}  # type: Dict[str, Any]
         return self._ok('POST', '/api/item/addFromURLs', body=data)
 
     def add_from_path(self, path: str, name: str, website: Optional[str] = None,
@@ -397,9 +392,7 @@ class Eagle:
             _path_item(item['path'], item['name'], item.get('website', ''), item.get('annotation', ''),
                        item.get('tags'))
             for item in items
-        ]}  # type: Dict[str, Any]
-        if folder_id is not None:
-            data['folderId'] = folder_id
+        ], **compact(folderId=folder_id)}  # type: Dict[str, Any]
         return self._ok('POST', '/api/item/addFromPaths', body=data)
 
     def add_bookmark(self, url: str, name: str, tags: Optional[List[str]] = None,
@@ -481,17 +474,10 @@ class Eagle:
         Returns:
             list: The matching items.
         """
-        params = {'limit': limit, 'offset': offset}  # type: Dict[str, Any]
-        if order_by:
-            params['orderBy'] = order_by
-        if keyword:
-            params['keyword'] = keyword
-        if ext:
-            params['ext'] = ext
-        if tags:
-            params['tags'] = ','.join(tags)
-        if folders:
-            params['folders'] = ','.join(folders)
+        # As in 1.1.1, empty filters ('' or []) are left out too, not only missing ones.
+        params = dict({'limit': limit, 'offset': offset}, **compact(
+            orderBy=order_by or None, keyword=keyword or None, ext=ext or None,
+            tags=','.join(tags) if tags else None, folders=','.join(folders) if folders else None))
         return self._data('GET', '/api/item/list', params)
 
     def move_to_trash(self, item_ids: List[str]) -> bool:
@@ -560,15 +546,7 @@ class Eagle:
             EagleAPIError: Eagle could not update the item (always raised, as in 1.1.1, where it was a
                 plain ``Exception``; ``EagleAPIError`` is a subclass of it).
         """
-        data = {"id": item_id}  # type: Dict[str, Any]
-        if tags is not None:
-            data["tags"] = tags
-        if annotation is not None:
-            data["annotation"] = annotation
-        if url is not None:
-            data["url"] = url
-        if star is not None:
-            data["star"] = star
+        data = dict({'id': item_id}, **compact(tags=tags, annotation=annotation, url=url, star=star))
 
         payload, status_code = self._client.exchange('POST', '/api/item/update', body=data)
         if not is_success(payload):
@@ -594,9 +572,7 @@ class Eagle:
         Returns:
             dict: The created folder.
         """
-        data = {'folderName': folder_name}
-        if parent_id is not None:
-            data['parent'] = parent_id
+        data = dict({'folderName': folder_name}, **compact(parent=parent_id))
         return self._data('POST', '/api/folder/create', body=data)
 
     def rename_folder(self, folder_id: str, new_name: str) -> Optional[Dict[str, Any]]:
@@ -631,13 +607,8 @@ class Eagle:
         Returns:
             dict: The updated folder.
         """
-        data = {'folderId': folder_id}
-        if new_name is not None:
-            data['newName'] = new_name
-        if new_description is not None:
-            data['newDescription'] = new_description
-        if new_color is not None:
-            data['newColor'] = new_color
+        data = dict({'folderId': folder_id}, **compact(newName=new_name, newDescription=new_description,
+                                                        newColor=new_color))
         return self._data('POST', '/api/folder/update', body=data)
 
     def list_folders(self) -> Optional[List[Dict[str, Any]]]:

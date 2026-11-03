@@ -23,7 +23,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 import requests
 
 from ._apis import API_V2, api_for_path
-from .client import DEFAULT_BASE_URL, EagleClient, Params
+from .client import DEFAULT_BASE_URL, EagleClient, Params, compact
 
 MAX_LIMIT = 1000
 """The largest ``limit`` Eagle accepts on list endpoints."""
@@ -39,11 +39,6 @@ SHAPES = ('square', 'portrait', 'panoramic-portrait', 'landscape', 'panoramic-la
 
 Item = Dict[str, Any]
 Page = Dict[str, Any]
-
-
-def _compact(**fields: Any) -> Dict[str, Any]:
-    """The given fields without the ones that are ``None`` (= not set)."""
-    return {key: value for key, value in fields.items() if value is not None}
 
 
 def _rows(page: Any) -> Tuple[List[Any], Optional[int]]:
@@ -90,10 +85,10 @@ class _Section:
         return API_V2.path('{}/{}'.format(self._prefix, action))
 
     def _get(self, action: str, params: Params = None) -> Any:
-        return self._client.data('GET', self._path(action), _compact(**(params or {})))
+        return self._client.data('GET', self._path(action), compact(**(params or {})))
 
     def _post(self, action: str, body: Optional[Dict[str, Any]] = None) -> Any:
-        return self._client.data('POST', self._path(action), None, _compact(**(body or {})))
+        return self._client.data('POST', self._path(action), None, compact(**(body or {})))
 
 
 class ItemAPI(_Section):
@@ -196,7 +191,7 @@ class ItemAPI(_Section):
         Raises:
             ValueError: Not exactly one of ``url``, ``path``, ``base64`` and ``bookmark_url`` was given.
         """
-        sources = _compact(url=url, path=path, base64=base64, bookmarkURL=bookmark_url)
+        sources = compact(url=url, path=path, base64=base64, bookmarkURL=bookmark_url)
         if len(sources) != 1:
             raise ValueError('Give exactly one of url, path, base64 or bookmark_url (got {}).'.format(
                 ', '.join(sorted(sources)) or 'none'))
@@ -265,7 +260,7 @@ class ItemAPI(_Section):
         Raises:
             ValueError: Neither or both kinds of position were given, or the area is incomplete.
         """
-        rect = _compact(x=x, y=y, width=width, height=height)
+        rect = compact(x=x, y=y, width=width, height=height)
         if duration is not None and rect:
             raise ValueError('Give either duration (video) or x, y, width and height (image), not both.')
         if duration is None and len(rect) != 4:
@@ -279,7 +274,7 @@ class ItemAPI(_Section):
 
         Image comments can only move their area and video comments only their ``duration``.
         """
-        rect = _compact(x=x, y=y, width=width, height=height)
+        rect = compact(x=x, y=y, width=width, height=height)
         if duration is not None and rect:
             raise ValueError('A comment is either on an image area or on a video moment, not both.')
         return self._post('updateComment', dict(rect, id=item_id, commentId=comment_id, annotation=annotation,
@@ -340,7 +335,7 @@ class FolderAPI(_Section):
             raise ValueError('Give either parent or move_to_root, not both.')
         body = {'id': folder_id, 'name': name, 'description': description, 'tags': _list(tags),
                 'iconColor': icon_color, 'parent': parent}
-        body = _compact(**body)
+        body = compact(**body)
         if move_to_root:
             body['parent'] = None  # Eagle's way of saying "top level"
         return self._client.data('POST', self._path('update'), None, body)
@@ -563,10 +558,8 @@ def _list(values: Optional[Sequence[Any]]) -> Optional[List[Any]]:
 
 
 def _options(limit: Optional[int], options: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    merged = dict(options or {})
-    if limit is not None:
-        merged['limit'] = limit
-    return merged or None
+    """The AI search ``options``, with ``limit`` merged in; ``None`` (not sent) when empty."""
+    return dict(options or {}, **compact(limit=limit)) or None
 
 
 class EagleV2:

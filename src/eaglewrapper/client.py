@@ -23,6 +23,11 @@ REPLY_TEXT_KEPT = 200  # characters of a non-JSON reply kept on EagleResponseErr
 Params = Optional[Dict[str, Any]]
 
 
+def compact(**fields: Any) -> Dict[str, Any]:
+    """The given request fields without the ones that are ``None`` (= not set), in the given order."""
+    return {key: value for key, value in fields.items() if value is not None}
+
+
 def is_success(payload: Any) -> bool:
     """True if a decoded Eagle reply says ``"status": "success"``."""
     return isinstance(payload, dict) and payload.get('status') == 'success'
