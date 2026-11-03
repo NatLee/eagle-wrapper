@@ -22,6 +22,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tupl
 
 import requests
 
+from ._apis import API_V2, api_for_path
 from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params
 
 MAX_LIMIT = 1000
@@ -79,14 +80,17 @@ class _Section:
         self._client = client
 
     def __repr__(self) -> str:
-        return '<{} {}/api/v2/{}/>'.format(type(self).__name__, self._client.base_url, self._prefix)
+        return '<{} {}{}>'.format(type(self).__name__, self._client.base_url, self._path())
+
+    def _path(self, action: str = '') -> str:
+        """The full path of one endpoint of this group, e.g. ``/api/v2/item/get``."""
+        return API_V2.path('{}/{}'.format(self._prefix, action))
 
     def _get(self, action: str, params: Params = None) -> Any:
-        return self._client.data('GET', '/api/v2/{}/{}'.format(self._prefix, action), _compact(**(params or {})))
+        return self._client.data('GET', self._path(action), _compact(**(params or {})))
 
     def _post(self, action: str, body: Optional[Dict[str, Any]] = None) -> Any:
-        return self._client.data('POST', '/api/v2/{}/{}'.format(self._prefix, action), None,
-                                 _compact(**(body or {})))
+        return self._client.data('POST', self._path(action), None, _compact(**(body or {})))
 
 
 class ItemAPI(_Section):
@@ -212,7 +216,7 @@ class ItemAPI(_Section):
         items = list(items)
         if not 1 <= len(items) <= MAX_LIMIT:
             raise ValueError('add_many takes 1 to {} items, not {}.'.format(MAX_LIMIT, len(items)))
-        data = self._client.data('POST', '/api/v2/item/add', None, {'items': items})
+        data = self._post('add', {'items': items})
         return list(data.get('ids') or []) if isinstance(data, dict) else list(data or [])
 
     def update(self, item_id: str, *, name: Optional[str] = None, tags: Optional[Sequence[str]] = None,
@@ -336,7 +340,7 @@ class FolderAPI(_Section):
         body = _compact(**body)
         if move_to_root:
             body['parent'] = None  # Eagle's way of saying "top level"
-        return self._client.data('POST', '/api/v2/folder/update', None, body)
+        return self._client.data('POST', self._path('update'), None, body)
 
 
 class SmartFolderAPI(_Section):
@@ -480,7 +484,7 @@ class LibraryAPI(_Section):
 
     def icon(self, library_path: str) -> bytes:
         """A library's icon image (``GET /api/v2/library/icon``)."""
-        return self._client.binary('/api/v2/library/icon', {'libraryPath': library_path})
+        return self._client.binary(self._path('icon'), {'libraryPath': library_path})
 
 
 class AppAPI(_Section):
@@ -608,8 +612,8 @@ class EagleV2:
         method = method.upper()
         if method not in ('GET', 'POST'):
             raise ValueError("method must be 'GET' or 'POST', not {!r}".format(method))
-        if not path.startswith('/api/'):
-            path = '/api/v2/' + path.lstrip('/')
+        if api_for_path(path) is None:
+            path = API_V2.path(path)
         if method == 'POST' and body is None:
             body = {}
         return self._client.data(method, path, params, body)

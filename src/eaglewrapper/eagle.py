@@ -14,6 +14,7 @@ import requests
 from loguru import logger
 
 from . import _library
+from ._apis import API_V2
 from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params, error_message, is_success
 from .errors import EagleAPIError, EagleResponseError
 from .v2 import EagleV2
@@ -159,7 +160,7 @@ class Eagle:
             EagleConnectionError: Eagle could not be reached at all.
         """
         try:
-            return is_success(self._client.call('GET', '/api/v2/app/info'))
+            return is_success(self._client.call('GET', API_V2.path('app/info')))
         except EagleResponseError:
             return False
 
