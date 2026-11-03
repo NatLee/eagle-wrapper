@@ -37,6 +37,14 @@ class TestSupportedApis(unittest.TestCase):
         self.assertIsNone(api_for_path('/health'))
 
 
+class TestVersionFollowsTheApi(unittest.TestCase):
+    """README "Versioning": the major number is the newest Eagle API generation this release speaks."""
+
+    def test_major_version_is_the_newest_generation(self):
+        major = int(eaglewrapper.__version__.split('.')[0])
+        self.assertEqual(major, max(api.generation for api in SUPPORTED_APIS))
+
+
 class TestNotJsonHint(MockedHTTP):
     """A reply that is not JSON says which Eagle build the API needs, taken from SUPPORTED_APIS."""
 

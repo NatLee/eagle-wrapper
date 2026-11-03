@@ -5,7 +5,7 @@
 * :mod:`eaglewrapper.errors` - the exceptions.
 * :data:`SUPPORTED_APIS` - which Eagle APIs and Eagle builds this release covers.
 """
-__version__ = '1.2.0'
+__version__ = '2.0.0'
 
 from ._apis import API_V1, API_V2, SUPPORTED_APIS, EagleAPI
 from .client import EagleClient
