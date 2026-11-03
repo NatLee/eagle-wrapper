@@ -7,8 +7,8 @@ build that has it, and the newest Eagle build whose additions this release wraps
 
 The code (endpoint paths, error hints), setup.py (PyPI summary and links) and the
 README all take these facts from here, and a test checks the README against them.
-The major number of EagleWrapper's own version follows the API generation; see
-"Versioning" in the README.
+The major number of EagleWrapper's own version is the newest generation listed here
+(a test checks that too); see "Versioning" in the README.
 
 This file imports nothing from the rest of the package, so setup.py can load it on
 its own without installing the package's dependencies.
@@ -20,6 +20,7 @@ class EagleAPI(NamedTuple):
     """One generation of Eagle's local HTTP API.
 
     Attributes:
+        generation: 1 for V1, 2 for V2. EagleWrapper's major version is the newest one it speaks.
         name: What Eagle's docs call it, e.g. ``'Web API V2'``.
         prefix: The path every endpoint of it starts with, e.g. ``'/api/v2/'``.
         since: The first Eagle build that has it, e.g. ``'4.0 Build 21'``.
@@ -29,6 +30,7 @@ class EagleAPI(NamedTuple):
         docs: The official documentation.
     """
 
+    generation: int
     name: str
     prefix: str
     since: str
@@ -41,12 +43,12 @@ class EagleAPI(NamedTuple):
 
 
 API_V1 = EagleAPI(
-    name='V1', prefix='/api/', since='1.11 Build 21', covered_up_to='3.0 Build 23',
+    generation=1, name='V1', prefix='/api/', since='1.11 Build 21', covered_up_to='3.0 Build 23',
     docs='https://api.eagle.cool/')
 """The original API, which Eagle now calls legacy. Its last documented change came in Eagle 3.0 Build 23."""
 
 API_V2 = EagleAPI(
-    name='Web API V2', prefix='/api/v2/', since='4.0 Build 21', covered_up_to='4.0 Build 22',
+    generation=2, name='Web API V2', prefix='/api/v2/', since='4.0 Build 21', covered_up_to='4.0 Build 22',
     docs='https://developer.eagle.cool/web-api')
 """The current API. Eagle 4.0 Build 22 added smart folders and comments."""
 

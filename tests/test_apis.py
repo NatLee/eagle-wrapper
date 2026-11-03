@@ -23,6 +23,9 @@ class TestSupportedApis(unittest.TestCase):
                          ('/api/v2/', '4.0 Build 21', '4.0 Build 22'))
         self.assertIs(eaglewrapper.SUPPORTED_APIS, SUPPORTED_APIS)
 
+    def test_generations_count_up_from_1(self):
+        self.assertEqual([api.generation for api in SUPPORTED_APIS], [1, 2])
+
     def test_path(self):
         self.assertEqual(API_V2.path('item/get'), '/api/v2/item/get')
         self.assertEqual(API_V2.path('/item/get'), '/api/v2/item/get')
@@ -32,6 +35,14 @@ class TestSupportedApis(unittest.TestCase):
         self.assertIs(api_for_path('/api/v2/item/get'), API_V2)
         self.assertIs(api_for_path('/api/item/list'), API_V1)
         self.assertIsNone(api_for_path('/health'))
+
+
+class TestVersionFollowsTheApi(unittest.TestCase):
+    """README "Versioning": the major number is the newest Eagle API generation this release speaks."""
+
+    def test_major_version_is_the_newest_generation(self):
+        major = int(eaglewrapper.__version__.split('.')[0])
+        self.assertEqual(major, max(api.generation for api in SUPPORTED_APIS))
 
 
 class TestNotJsonHint(MockedHTTP):

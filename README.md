@@ -269,8 +269,9 @@ Moving a V1 script to V2 when your Eagle is 4.0 Build 21 or later:
 
 ## Versioning
 
-The version number follows Eagle's API. The major number is the Eagle API generation a release is built
-for: 1 for V1, Eagle's original `/api/` API, and 2 for Web API V2 (`/api/v2/`). Minor releases wrap more
+The version number follows Eagle's API. The major number is the newest Eagle API generation a release
+speaks: 1 for V1, Eagle's original `/api/` API, and 2 for Web API V2 (`/api/v2/`). A test keeps the two in
+step. Minor releases wrap more
 of that API (often what a new Eagle build added) or add options to the package, and patch releases fix bugs.
 Code that works with one release keeps working with later releases that have the same major number.
 One slip from the early days: 1.1.0 renamed two arguments of 1.0.0 and changed what `add_from_url` and
@@ -285,10 +286,12 @@ that brought it (see the [V1 changelog](https://api.eagle.cool/changelog) and th
 | 1.0.0 (April 2023) | V1 | 3 endpoints (add from URL, list items, update item) and the library-folder reader |
 | 1.1.0, 1.1.1 (April 2023) | V1 | all 21 endpoints documented at the time |
 | 1.2.0 (November 2026) | V1 and Web API V2 | V1 up to its last change (Eagle 3.0 Build 23) plus `/api/library/icon`; V2 up to Eagle 4.0 Build 22 (smart folders, comments) |
+| 2.0.0 (November 2026) | V1 and Web API V2 | the same as 1.2.0, plus `SUPPORTED_APIS` (below) |
 
-1.2.0 is the odd one out. It is the first release that speaks Web API V2, but it came out as 1.2.0, before
-this rule was written down, because nothing changed for code written against V1. Its V1 methods work as
-before; `eagle.v2` is the addition.
+1.2.0 is the odd one out. It was the first release that speaks Web API V2, but it came out as 1.2.0,
+before this rule was written down, because nothing changed for code written against V1. 2.0.0 puts the
+number back on the rule. It is the 1.2.0 code with this versioning written down and `SUPPORTED_APIS`
+added, so going from 1.2.0 to 2.0.0 needs no change in your code.
 
 The installed package knows what it covers:
 
@@ -310,9 +313,10 @@ build are one call away with `eagle.v2.request('GET', 'section/endpoint')`. So a
 `item/select` and `folder/open`: the V2 changelog lists them, but the docs have no page for them yet, so
 they are not wrapped.
 
-What to pin: the major number, e.g. `EagleWrapper~=1.2` (that is `>=1.2, <2`). You get fixes and newly
-wrapped endpoints, and you move to another API generation only when you change the pin. `eagle.v2` needs
-1.2.0 or later. Scripts that only use the V1 methods run on 1.1.0 and later, but 1.2.0 fixes several bugs
+What to pin: the major number, `EagleWrapper~=2.0` (that is `>=2.0, <3`). You get fixes and newly
+wrapped endpoints, and you move to another API generation only when you change the pin. The 1.x line gets
+no more releases: if you pinned `~=1.2`, change it to `~=2.0`; nothing else to do. `eagle.v2` needs
+1.2.0 or later. Scripts that only use the V1 methods run on 1.1.0 and later, but 1.2.0 fixed several bugs
 (see [Upgrading from 1.1.1](#upgrading-from-111)).
 
 ## Plugins and related projects
@@ -341,9 +345,6 @@ Built on EagleWrapper:
 - [yande-and-konachan-to-eagle](https://github.com/NatLee/yande-and-konachan-to-eagle): fetches images and
   their tags from yande.re and konachan.com and adds them to Eagle with `add_from_url`. A complete,
   small downloader to copy from.
-- [Eagle_Library_For_Web](https://github.com/gitaruurara/Eagle_Library_For_Web): a FastAPI app with a web
-  front end for browsing your Eagle libraries from a browser or phone. It uses `switch_library`,
-  `get_item_info` and `get_thumbnail_path`. README in Japanese.
 
 Built something with EagleWrapper? Open an issue or a pull request and it can go on this list.
 
@@ -354,6 +355,13 @@ The tests replace the HTTP calls with mocks, so Eagle does not need to be runnin
 ```bash
 pip install -e . pytest
 pytest tests
+```
+
+The editable install picks up your edits right away. To reinstall a regular copy from the checkout instead
+(what the old `reinstall.sh` and `reinstall.bat` did with the retired `setup.py install`):
+
+```bash
+python -m pip install --force-reinstall .
 ```
 
 `tox -e py` runs the same tests plus a check of the source distribution. CI runs them on Linux with
