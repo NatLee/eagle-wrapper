@@ -6,6 +6,7 @@ default) and answers in JSend format: ``{"status": "success", "data": ...}`` or
 API token, sends the request and turns the reply (or the lack of one) into Python
 values and exceptions, so the endpoint methods only describe what to send.
 """
+import os
 from typing import Any, Dict, Optional, Tuple
 
 import requests
@@ -14,6 +15,7 @@ from .errors import EagleAPIError, EagleConnectionError, EagleResponseError
 
 DEFAULT_HOST = 'http://localhost'
 DEFAULT_PORT = 41595
+TOKEN_ENV_VAR = 'EAGLE_API_TOKEN'
 
 Params = Optional[Dict[str, Any]]
 
@@ -41,7 +43,8 @@ class EagleClient:
         base_url: Where Eagle listens, e.g. ``http://localhost:41595`` (the default) or
             ``http://192.168.1.20:41595`` for Eagle on another computer.
         token: API token, needed only when Eagle runs on another device. It is sent as the
-            ``token`` query parameter on every request.
+            ``token`` query parameter on every request. When omitted, the ``EAGLE_API_TOKEN``
+            environment variable is used if it is set; pass ``''`` to send no token at all.
         timeout: Seconds to wait for Eagle, passed to ``requests``. ``None`` (the default)
             waits as long as it takes, like 1.1.1 did.
         session: A ``requests.Session`` (or anything with the same ``get``/``post``) to send
@@ -51,6 +54,8 @@ class EagleClient:
 
     def __init__(self, base_url: str = '{}:{}'.format(DEFAULT_HOST, DEFAULT_PORT), token: Optional[str] = None,
                  timeout: Optional[float] = None, session: Optional[requests.Session] = None):
+        if token is None:
+            token = os.environ.get(TOKEN_ENV_VAR) or None
         self.base_url = base_url.rstrip('/')
         self.token = token
         self.timeout = timeout

@@ -3,9 +3,11 @@
 V1 reference: https://api.eagle.cool/ (Eagle 1.11 Build 21 and later; Eagle now calls it legacy).
 
 The V1 methods keep the behaviour of 1.1.1: when Eagle reports a failure they return
-``False`` or ``None`` (and log a warning) instead of raising.
+``False`` or ``None`` (and log a warning) instead of raising. Pass ``raise_errors=True``
+to get an :class:`~eaglewrapper.errors.EagleAPIError` instead.
 """
 from typing import Any, Dict, List, Optional, Sequence, Union
+from urllib.parse import urlsplit
 
 import requests
 from loguru import logger
@@ -80,12 +82,31 @@ class Eagle:
     Args:
         domain: Scheme and host of Eagle's API server. Defaults to ``http://localhost``.
         port: Port of Eagle's API server. Defaults to ``41595``.
+        token: API token, needed only when Eagle runs on another device (Eagle >
+            Preferences > Developer). Sent as ``?token=`` on every request. When omitted,
+            the ``EAGLE_API_TOKEN`` environment variable is used if it is set.
+        base_url: The whole address instead of ``domain`` and ``port``, e.g.
+            ``http://192.168.1.20:41595``.
+        timeout: Seconds to wait for Eagle. ``None`` (default) waits as long as it takes.
+        session: A ``requests.Session`` to send requests with, e.g. to reuse connections.
+        raise_errors: When ``True``, the V1 methods raise
+            :class:`~eaglewrapper.errors.EagleAPIError` when Eagle reports a failure,
+            instead of returning ``False``/``None``.
     """
 
-    def __init__(self, domain: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+    def __init__(self, domain: str = DEFAULT_HOST, port: int = DEFAULT_PORT, *, token: Optional[str] = None,
+                 base_url: Optional[str] = None, timeout: Optional[float] = None,
+                 session: Optional[requests.Session] = None, raise_errors: bool = False):
         self.domain = domain
-        self.port = port
-        self._client = EagleClient('{}:{}'.format(domain, port))
+        self.port = port  # type: Optional[int]
+        if base_url is not None:
+            parts = urlsplit(base_url)
+            self.domain = '{}://{}'.format(parts.scheme, parts.hostname)
+            self.port = parts.port
+        else:
+            base_url = '{}:{}'.format(domain, port)
+        self.raise_errors = raise_errors
+        self._client = EagleClient(base_url, token=token, timeout=timeout, session=session)
 
     def __repr__(self) -> str:
         return 'Eagle({!r})'.format(self.host)
@@ -98,6 +119,15 @@ class Eagle:
     @host.setter
     def host(self, value: str) -> None:
         self._client.base_url = value.rstrip('/')
+
+    @property
+    def token(self) -> Optional[str]:
+        """The API token sent with every request, or ``None``."""
+        return self._client.token
+
+    @token.setter
+    def token(self, value: Optional[str]) -> None:
+        self._client.token = value
 
     def check_success(self, response: Union[requests.Response, Dict[str, Any]]) -> bool:
         """
@@ -117,8 +147,10 @@ class Eagle:
     # =================================================
 
     def _failed(self, path: str, payload: Any, status_code: Optional[int] = None) -> None:
-        """Report a V1 failure with a warning; the method then returns False or None, as in 1.1.1."""
+        """Report a V1 failure: raise with ``raise_errors``, otherwise log a warning."""
         message = '{} failed: {}'.format(path, error_message(payload))
+        if self.raise_errors:
+            raise EagleAPIError(message, endpoint=path, status_code=status_code, payload=payload)
         logger.warning('[Eagle] {}', message)
 
     def _ok(self, method: str, path: str, params: Params = None, body: Any = None) -> bool:
@@ -308,6 +340,7 @@ class Eagle:
             dict: Eagle's whole reply, e.g. ``{'status': 'success'}``. Unlike the other add methods
             this is not a bool (kept as in 1.1.1), so test ``reply['status'] == 'success'`` or
             ``eagle.check_success(reply)`` rather than the reply itself: a dict is always truthy.
+            With ``raise_errors=True`` a failure raises instead.
         """
         data = _path_item(path, name, website, annotation, tags)
         data['folderId'] = folder_id
