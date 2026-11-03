@@ -1,6 +1,7 @@
-"""The :class:`Eagle` class: Eagle's V1 (legacy) API and the library-folder reader.
+"""The :class:`Eagle` class: Eagle's V1 (legacy) API, the library-folder reader and the V2 entry point.
 
 V1 reference: https://api.eagle.cool/ (Eagle 1.11 Build 21 and later; Eagle now calls it legacy).
+V2 reference: https://developer.eagle.cool/web-api (Eagle 4.0 Build 21 and later), see :mod:`eaglewrapper.v2`.
 
 The V1 methods keep the behaviour of 1.1.1: when Eagle reports a failure they return
 ``False`` or ``None`` (and log a warning) instead of raising. Pass ``raise_errors=True``
@@ -14,7 +15,8 @@ from loguru import logger
 
 from . import _library
 from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params, error_message, is_success
-from .errors import EagleAPIError
+from .errors import EagleAPIError, EagleResponseError
+from .v2 import EagleV2
 
 
 class ImageData:
@@ -91,7 +93,11 @@ class Eagle:
         session: A ``requests.Session`` to send requests with, e.g. to reuse connections.
         raise_errors: When ``True``, the V1 methods raise
             :class:`~eaglewrapper.errors.EagleAPIError` when Eagle reports a failure,
-            instead of returning ``False``/``None``.
+            instead of returning ``False``/``None``. The V2 methods always raise.
+
+    Attributes:
+        v2: The V2 Web API (:class:`~eaglewrapper.v2.EagleV2`), sharing this connection
+            setup. Needs Eagle 4.0 Build 21 or later.
     """
 
     def __init__(self, domain: str = DEFAULT_HOST, port: int = DEFAULT_PORT, *, token: Optional[str] = None,
@@ -107,6 +113,7 @@ class Eagle:
             base_url = '{}:{}'.format(domain, port)
         self.raise_errors = raise_errors
         self._client = EagleClient(base_url, token=token, timeout=timeout, session=session)
+        self.v2 = EagleV2(client=self._client)
 
     def __repr__(self) -> str:
         return 'Eagle({!r})'.format(self.host)
@@ -141,6 +148,20 @@ class Eagle:
         """
         payload = response if isinstance(response, dict) else response.json()
         return is_success(payload)
+
+    def supports_v2(self) -> bool:
+        """Whether this Eagle offers the V2 Web API (Eagle 4.0 Build 21 or later).
+
+        Returns ``False`` when Eagle answers ``/api/v2/app/info`` with anything but success,
+        e.g. an older Eagle's ``Not Found`` page.
+
+        Raises:
+            EagleConnectionError: Eagle could not be reached at all.
+        """
+        try:
+            return is_success(self._client.call('GET', '/api/v2/app/info'))
+        except EagleResponseError:
+            return False
 
     # =================================================
     # Shared request handling for the V1 methods
