@@ -315,6 +315,38 @@ wrapped endpoints, and you move to another API generation only when you change t
 1.2.0 or later. Scripts that only use the V1 methods run on 1.1.0 and later, but 1.2.0 fixes several bugs
 (see [Upgrading from 1.1.1](#upgrading-from-111)).
 
+## Plugins and related projects
+
+Not every job needs a script. A few things worth knowing about before you write one:
+
+From Eagle:
+
+- [Plugin Center](https://community-en.eagle.cool/plugins): plugins you install inside Eagle. The batch job
+  you are about to script may already exist as one.
+- [API Playground](https://developer.eagle.cool/web-api/get-started/playground): with Eagle open, visit
+  `http://localhost:41595/api/v2/playground` to try any Web API V2 endpoint from a form and see Eagle's real
+  reply before you write the Python call. It works on your real library, so writes there are real too.
+- [Plugin API](https://developer.eagle.cool/plugin-api) and the
+  [official plugin examples](https://github.com/eagle-app/eagle-plugin-examples): for code that should run
+  inside Eagle (a window, a background service, support for a new file format, an inspector panel) rather
+  than talk to it from outside. The examples have one small working plugin per type.
+- [AI Search](https://eagle.cool/support/article/ai-search): Eagle's offline search by description or by
+  similar image. `eagle.v2.ai_search` only works with this plugin installed.
+- [Eagle Skill / MCP](https://en.eagle.cool/blog/post/eagle-plugin-mcp-skill): lets an AI agent clean up
+  tags, plan folders and rewrite names and descriptions in your library. Worth a look when the hard part is
+  deciding what to change, not making the calls.
+
+Built on EagleWrapper:
+
+- [yande-and-konachan-to-eagle](https://github.com/NatLee/yande-and-konachan-to-eagle): fetches images and
+  their tags from yande.re and konachan.com and adds them to Eagle with `add_from_url`. A complete,
+  small downloader to copy from.
+- [Eagle_Library_For_Web](https://github.com/gitaruurara/Eagle_Library_For_Web): a FastAPI app with a web
+  front end for browsing your Eagle libraries from a browser or phone. It uses `switch_library`,
+  `get_item_info` and `get_thumbnail_path`. README in Japanese.
+
+Built something with EagleWrapper? Open an issue or a pull request and it can go on this list.
+
 ## Development
 
 The tests replace the HTTP calls with mocks, so Eagle does not need to be running.
