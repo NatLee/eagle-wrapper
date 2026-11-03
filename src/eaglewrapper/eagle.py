@@ -3,11 +3,30 @@
 V1 reference: https://api.eagle.cool/ (Eagle 1.11 Build 21 and later; Eagle now calls it legacy).
 V2 reference: https://developer.eagle.cool/web-api (Eagle 4.0 Build 21 and later), see :mod:`eaglewrapper.v2`.
 
-The V1 methods keep the behaviour of 1.1.1: when Eagle reports a failure they return
-``False`` or ``None`` (and log a warning) instead of raising. Pass ``raise_errors=True``
-to get an :class:`~eaglewrapper.errors.EagleAPIError` instead.
+Compatibility with 1.1.1
+------------------------
+The V1 methods keep a few odd behaviours on purpose, because 1.1.1 had them and existing
+scripts may rely on them. This is the full list; each one may change only in a new major
+version (see "Versioning" in the README), and "Upgrading from 1.1.1" there tells users.
+
+* A failure reported by Eagle does not raise by default: status-only calls return
+  ``False``, the others return the reply's ``data`` (``None`` for
+  :meth:`Eagle.get_item_info`, :meth:`Eagle.get_thumbnail_path` and
+  :meth:`Eagle.get_img_list_info`), and a warning is logged. ``raise_errors=True``
+  raises :class:`~eaglewrapper.errors.EagleAPIError` instead (see ``_reply``).
+* :meth:`Eagle.add_from_path` returns Eagle's whole reply instead of a bool.
+* :meth:`Eagle.update_item` (and :meth:`Eagle.set_tag_with_id`) always raise on failure,
+  with 1.1.1's message ``[Eagle] Failed to update the item``.
+* :meth:`Eagle.list_items` leaves out empty filters (``''``, ``[]``), not only missing ones.
+* :meth:`Eagle.add_from_urls` accepts ``modification_time`` as well as Eagle's
+  ``modificationTime``.
+* :class:`ImageData` keeps its camelCase ``modificationTime`` argument, and the
+  add-from-path methods build their items with it, so they send the same fields as 1.1.1.
+* ``Eagle(domain, port)`` and the ``domain``, ``port`` and ``host`` attributes stay;
+  ``base_url`` is the newer way to say the same.
+* The exceptions also inherit what 1.1.1 let through (see :mod:`eaglewrapper.errors`).
 """
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlsplit
 
 import requests
@@ -175,22 +194,24 @@ class Eagle:
             raise EagleAPIError(message, endpoint=path, status_code=status_code, payload=payload)
         logger.warning('[Eagle] {}', message)
 
+    def _reply(self, method: str, path: str, params: Params = None, body: Any = None) -> Tuple[Any, bool]:
+        """Call a V1 endpoint and report a failure; return ``(decoded reply, whether it succeeded)``."""
+        payload, status_code = self._client.exchange(method, path, params, body)
+        succeeded = is_success(payload)
+        if not succeeded:
+            self._failed(path, payload, status_code)
+        return payload, succeeded
+
     def _ok(self, method: str, path: str, params: Params = None, body: Any = None) -> bool:
         """Call a V1 endpoint that answers only with a status; return whether it succeeded."""
-        payload, status_code = self._client.exchange(method, path, params, body)
-        if is_success(payload):
-            return True
-        self._failed(path, payload, status_code)
-        return False
+        return self._reply(method, path, params, body)[1]
 
     def _data(self, method: str, path: str, params: Params = None, body: Any = None,
               none_on_error: bool = False) -> Any:
         """Call a V1 endpoint and return its ``data`` (1.1.1 returned it even on failure)."""
-        payload, status_code = self._client.exchange(method, path, params, body)
-        if not is_success(payload):
-            self._failed(path, payload, status_code)
-            if none_on_error:
-                return None
+        payload, succeeded = self._reply(method, path, params, body)
+        if not succeeded and none_on_error:
+            return None
         return payload.get('data') if isinstance(payload, dict) else None
 
     # =================================================
@@ -365,10 +386,7 @@ class Eagle:
         """
         data = _path_item(path, name, website, annotation, tags)
         data['folderId'] = folder_id
-        payload, status_code = self._client.exchange('POST', '/api/item/addFromPath', body=data)
-        if not is_success(payload):
-            self._failed('/api/item/addFromPath', payload, status_code)
-        return payload
+        return self._reply('POST', '/api/item/addFromPath', body=data)[0]
 
     def add_from_paths(self, items: List[Dict[str, Any]], folder_id: Optional[str] = None) -> bool:
         """
@@ -548,10 +566,11 @@ class Eagle:
         """
         data = dict({'id': item_id}, **compact(tags=tags, annotation=annotation, url=url, star=star))
 
-        payload, status_code = self._client.exchange('POST', '/api/item/update', body=data)
+        path = '/api/item/update'
+        payload, status_code = self._client.exchange('POST', path, body=data)
         if not is_success(payload):
             raise EagleAPIError('[Eagle] Failed to update the item: {}'.format(error_message(payload)),
-                                endpoint='/api/item/update', status_code=status_code, payload=payload)
+                                endpoint=path, status_code=status_code, payload=payload)
         return payload.get("data")
 
     # =================================================
@@ -686,8 +705,9 @@ class Eagle:
         Returns:
             bytes: The image data, or None if Eagle reported a failure.
         """
+        path = '/api/library/icon'
         try:
-            return self._client.binary('/api/library/icon', {'libraryPath': library_path})
+            return self._client.binary(path, {'libraryPath': library_path})
         except EagleAPIError as e:
-            self._failed('/api/library/icon', e.payload, e.status_code)
+            self._failed(path, e.payload, e.status_code)
             return None
