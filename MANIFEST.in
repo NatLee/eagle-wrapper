@@ -1,7 +1,5 @@
 include pyproject.toml
 include *.md
-include *.sh
-include *.bat
 include LICENSE
 include src/eaglewrapper/py.typed
 recursive-include tests *.py

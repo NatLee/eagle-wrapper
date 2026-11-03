@@ -360,6 +360,13 @@ pip install -e . pytest
 pytest tests
 ```
 
+The editable install picks up your edits right away. To reinstall a regular copy from the checkout instead
+(what the old `reinstall.sh` and `reinstall.bat` did with the retired `setup.py install`):
+
+```bash
+python -m pip install --force-reinstall .
+```
+
 `tox -e py` runs the same tests plus a check of the source distribution. CI runs them on Linux with
 Python 3.6 to 3.14, and on Windows and macOS with Python 3.14.
 
