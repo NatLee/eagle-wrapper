@@ -369,6 +369,14 @@ How the code is laid out (`src/eaglewrapper/`):
 | `_library.py` | reads `metadata.json` files from a library folder |
 | `errors.py` | the exceptions |
 
+## Support
+
+EagleWrapper is free and kept up in spare time. If it saved you an afternoon, you can buy me a coffee on
+Ko-fi or chip in on Liberapay. Bug reports and pull requests help just as much.
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-natlee__-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/natlee_)
+[![Liberapay](https://img.shields.io/badge/Liberapay-natlee-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/natlee)
+
 ## Contributor
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
