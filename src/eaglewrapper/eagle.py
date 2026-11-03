@@ -110,7 +110,7 @@ class Eagle:
                     name = data.get('name')
                     for name_start_filter in name_start_filters:
                         if not name.startswith(name_start_filter):
-                            return {}
+                            return None
                 except Exception as e:
                     logger.warning(f'[Eagle] {e}')
             return data
@@ -125,7 +125,8 @@ class Eagle:
             for future in concurrent.futures.as_completed(get_id_job):
                 try:
                     data = future.result()
-                    if data is not None:
+                    # Skip images removed by the name filters and files that could not be read.
+                    if data:
                         imgs_info.append(data)
                 except Exception as e:
                     logger.error(e)
