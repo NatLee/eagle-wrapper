@@ -1,13 +1,19 @@
-'''
-Eagle class
-'''
-from typing import Optional, List, Dict, Any
-import datetime
-from pathlib import Path
-import json
-import concurrent.futures
+"""The :class:`Eagle` class: Eagle's V1 (legacy) API and the library-folder reader.
+
+V1 reference: https://api.eagle.cool/ (Eagle 1.11 Build 21 and later; Eagle now calls it legacy).
+
+The V1 methods keep the behaviour of 1.1.1: when Eagle reports a failure they return
+``False`` or ``None`` (and log a warning) instead of raising.
+"""
+from typing import Any, Dict, List, Optional, Sequence, Union
+
 import requests
 from loguru import logger
+
+from . import _library
+from .client import DEFAULT_HOST, DEFAULT_PORT, EagleClient, Params, error_message, is_success
+from .errors import EagleAPIError
+
 
 class ImageData:
     """
@@ -22,7 +28,9 @@ class ImageData:
         modificationTime (int): The creation date of the image. Can be used to alter the image's sorting order in Eagle.
         headers (dict): Optional. Customize the HTTP headers properties. Can be used to bypass security on certain websites.
     """
-    def __init__(self, url: str, name: str, website: str = '', tags: list = None, annotation: str = '', modificationTime: int = None, headers: dict = None):
+    def __init__(self, url: str, name: str, website: Optional[str] = '', tags: Optional[List[str]] = None,
+                 annotation: Optional[str] = '', modificationTime: Optional[int] = None,
+                 headers: Optional[Dict[str, str]] = None):
         """
         Initializes the ImageData instance with the given attributes.
 
@@ -32,17 +40,14 @@ class ImageData:
             website (str, optional): The address of the image source. Defaults to an empty string.
             tags (list, optional): Tags for the image. Defaults to an empty list.
             annotation (str, optional): The annotation for the image. Defaults to an empty string.
-            modificationTime (int, optional): The creation date of the image. Can be used to alter the image's sorting order in Eagle. Defaults to None.
-            headers (dict, optional): Optional. Customize the HTTP headers properties. Can be used to bypass security on certain websites. Defaults to an empty dictionary.
-        
+            modificationTime (int, optional): The creation date of the image. Can be used to alter the image's
+                sorting order in Eagle. Defaults to None.
+            headers (dict, optional): Customize the HTTP headers properties. Can be used to bypass security on
+                certain websites. Defaults to an empty dictionary.
+
         Raises:
             ValueError: If the URL or name is empty.
         """
-        if tags is None:
-            tags = []
-        if headers is None:
-            headers = {}
-
         if not url:
             raise ValueError("URL cannot be empty.")
         if not name:
@@ -51,113 +56,134 @@ class ImageData:
         self.url = url
         self.name = name
         self.website = website
-        self.tags = tags
+        self.tags = [] if tags is None else tags
         self.annotation = annotation
         self.modificationTime = modificationTime
-        self.headers = headers
+        self.headers = {} if headers is None else headers
 
     def to_dict(self) -> dict:
-        return self.__dict__
+        """The fields as the JSON object Eagle expects (a copy)."""
+        return dict(self.__dict__)
+
+
+def _path_item(path: str, name: str, website: Optional[str], annotation: Optional[str],
+               tags: Optional[List[str]]) -> Dict[str, Any]:
+    """An item for addFromPath(s): the ImageData fields with ``path`` instead of ``url``."""
+    item = ImageData(url=path, name=name, website=website, tags=tags, annotation=annotation).to_dict()
+    item['path'] = item.pop('url')
+    return item
 
 
 class Eagle:
-    def __init__(self, domain='http://localhost', port=41595):
+    """Talk to a running Eagle app.
+
+    Args:
+        domain: Scheme and host of Eagle's API server. Defaults to ``http://localhost``.
+        port: Port of Eagle's API server. Defaults to ``41595``.
+    """
+
+    def __init__(self, domain: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
         self.domain = domain
         self.port = port
-        self.host = f'{domain}:{port}'
+        self._client = EagleClient('{}:{}'.format(domain, port))
 
-    def check_success(self, response) -> bool:
+    def __repr__(self) -> str:
+        return 'Eagle({!r})'.format(self.host)
+
+    @property
+    def host(self) -> str:
+        """The address requests go to, e.g. ``http://localhost:41595``."""
+        return self._client.base_url
+
+    @host.setter
+    def host(self, value: str) -> None:
+        self._client.base_url = value.rstrip('/')
+
+    def check_success(self, response: Union[requests.Response, Dict[str, Any]]) -> bool:
         """
         Check if the API response status is 'success'.
-        
+
         Args:
-            response (Response): The response object from an API call.
+            response (Response or dict): The response object from an API call, or its decoded JSON.
 
         Returns:
             bool: True if the status is 'success', otherwise False.
         """
-        status = response.json().get('status')
-        if status != 'success':
-            return False
-        return True
+        payload = response if isinstance(response, dict) else response.json()
+        return is_success(payload)
+
+    # =================================================
+    # Shared request handling for the V1 methods
+    # =================================================
+
+    def _failed(self, path: str, payload: Any, status_code: Optional[int] = None) -> None:
+        """Report a V1 failure with a warning; the method then returns False or None, as in 1.1.1."""
+        message = '{} failed: {}'.format(path, error_message(payload))
+        logger.warning('[Eagle] {}', message)
+
+    def _ok(self, method: str, path: str, params: Params = None, body: Any = None) -> bool:
+        """Call a V1 endpoint that answers only with a status; return whether it succeeded."""
+        payload, status_code = self._client.exchange(method, path, params, body)
+        if is_success(payload):
+            return True
+        self._failed(path, payload, status_code)
+        return False
+
+    def _data(self, method: str, path: str, params: Params = None, body: Any = None,
+              none_on_error: bool = False) -> Any:
+        """Call a V1 endpoint and return its ``data`` (1.1.1 returned it even on failure)."""
+        payload, status_code = self._client.exchange(method, path, params, body)
+        if not is_success(payload):
+            self._failed(path, payload, status_code)
+            if none_on_error:
+                return None
+        return payload.get('data') if isinstance(payload, dict) else None
 
     # =================================================
     # NOT IN API methods
     # =================================================
 
-    def get_img_info_from_lib_path(self, library_path: str, name_start_filters=[], max_workers=4) -> list:
+    def get_img_info_from_lib_path(self, library_path: str, name_start_filters: Optional[Sequence[str]] = None,
+                                   max_workers: int = 4) -> List[Dict[str, Any]]:
         """
         Get all images' information (metadata) from the path of the source library.
+
+        This reads ``images/<id>.info/metadata.json`` files from the library folder directly,
+        so Eagle does not need to be running and it is faster than the API for big libraries.
+        The library's own ``metadata.json`` (folders, smart folders, ...) is not returned.
 
         For example, there is a path of a library at '/path/to/your/test.library'.
 
         Args:
             library_path (str): The path of the source library.
-            name_start_filters (list, optional): A list of name prefixes to filter images. Defaults to an empty list.
+            name_start_filters (list, optional): Name prefixes to filter images by; a name has to start with
+                every one of them. Defaults to no filter.
             max_workers (int, optional): The number of concurrent workers. Defaults to 4.
 
         Returns:
             list: A list of dictionaries containing the metadata of the images.
         """
+        return _library.read_items(library_path, name_start_filters, max_workers)
 
-        imgs_info = []
-
-        def load_id(meta_path):
-            data = {}
-            with open(meta_path, 'r', encoding='utf-8') as f:
-                try:
-                    data = json.loads(f.read())
-                    name = data.get('name')
-                    for name_start_filter in name_start_filters:
-                        if not name.startswith(name_start_filter):
-                            return None
-                except Exception as e:
-                    logger.warning(f'[Eagle] {e}')
-            return data
-
-        logger.debug('[Eagle] Start getting images INFO...')
-        st = datetime.datetime.now()
-
-        library = Path(library_path)
-        meta_paths = [
-            meta_path for meta_path in library.glob('**/metadata.json')
-            # The library's own metadata.json (folders, smart folders, ...) is not an image.
-            if meta_path.parent != library
-        ]
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            get_id_job = {
-                executor.submit(load_id, meta_path): meta_path for meta_path in meta_paths
-            }
-            for future in concurrent.futures.as_completed(get_id_job):
-                try:
-                    data = future.result()
-                    # Skip images removed by the name filters and files that could not be read.
-                    if data:
-                        imgs_info.append(data)
-                except Exception as e:
-                    logger.error(e)
-        ed = datetime.datetime.now()
-        logger.debug(f'[Eagle] Get all images INFO cost :: {(ed - st).total_seconds():.2f} sec(s)')
-
-        return imgs_info
-
-    def set_tag_with_id(self, item_id: int, tags: list) -> dict:
+    def set_tag_with_id(self, item_id: str, tags: List[str]) -> Optional[Dict[str, Any]]:
         """
         Set tags to an image with its ID by using `update` API.
 
         API DOC: https://api.eagle.cool/item/update
 
         Args:
-            item_id (int): The ID of the image to be updated.
+            item_id (str): The ID of the image to be updated.
             tags (list): A list of tags to be associated with the image.
 
         Returns:
-            dict: A dictionary containing the result information of the updated image.
+            dict: The updated item.
+
+        Raises:
+            EagleAPIError: Eagle could not update the item.
         """
         return self.update_item(item_id, tags)
 
-    def get_img_list_info(self, max_image_number: int, name_start_filter='') -> list:
+    def get_img_list_info(self, max_image_number: int, name_start_filter: str = '') -> Optional[List[Dict[str, Any]]]:
         """
         Get a list of images' information up to the specified maximum number of images.
 
@@ -168,71 +194,64 @@ class Eagle:
             name_start_filter (str, optional): A string to filter images by name prefix. Defaults to an empty string.
 
         Returns:
-            list: A list of dictionaries containing the information of the retrieved images.
+            list: The matching images, or None if Eagle reported a failure.
         """
-        resp = requests.get(f'{self.host}/api/item/list?limit={max_image_number}')
-        data = resp.json().get('data')
-        if name_start_filter != '':
-            data = [d for d in data if d.get('name').startswith(name_start_filter)]
+        data = self._data('GET', '/api/item/list', {'limit': max_image_number})
+        if name_start_filter != '' and data is not None:
+            data = [d for d in data if str(d.get('name') or '').startswith(name_start_filter)]
         return data
 
     # =================================================
     # Application methods
     # =================================================
 
-    def get_application_info(self) -> dict:
+    def get_application_info(self) -> Optional[Dict[str, Any]]:
         """
         Get detailed information on the Eagle App currently running.
 
         API DOC: https://api.eagle.cool/application/info
 
         Returns:
-            dict: A dictionary containing the detailed information on the Eagle App, such as version, buildVersion, execPath, and platform.
+            dict: Information on the Eagle App, such as version, buildVersion, execPath, and platform.
         """
-        resp = requests.get(f'{self.host}/api/application/info')
-        return resp.json().get('data')
+        return self._data('GET', '/api/application/info')
 
     # =================================================
     # Image (Item) methods
     # =================================================
 
-    def add_from_url(self, url: str, name: str, tags=[], website='', annotation='', modification_time: int = None, folder_id: str = None, headers: dict = None) -> bool:
+    def add_from_url(self, url: str, name: str, tags: Optional[List[str]] = None, website: str = '',
+                     annotation: str = '', modification_time: Optional[int] = None, folder_id: Optional[str] = None,
+                     headers: Optional[Dict[str, str]] = None) -> bool:
         """
         Add a new image or materials from the given URL.
 
         API DOC: https://api.eagle.cool/item/add-from-url
 
         Args:
-            url (str): The URL of the image or materials to be added.
+            url (str): The URL of the image or materials to be added. Supports http, https and base64.
             name (str): The name to be assigned to the item.
             tags (list, optional): A list of tags to be associated with the item. Defaults to an empty list.
             website (str, optional): The website where the image or materials are from. Defaults to ''.
             annotation (str, optional): Any additional annotation or description for the item. Defaults to ''.
-            modification_time (int, optional): The creation date of the image.
+            modification_time (int, optional): The creation date of the image (milliseconds since the epoch).
             folder_id (str, optional): If this parameter is defined, the image will be added to the corresponding folder.
-            headers (dict, optional): Customize the HTTP headers properties, this could be used to circumvent the security of certain websites.
+            headers (dict, optional): Customize the HTTP headers properties, this could be used to circumvent the
+                security of certain websites.
 
         Returns:
-            bool: A flag.
+            bool: True if Eagle accepted the image.
+
+        Raises:
+            ValueError: If the URL or name is empty.
         """
-
-        data = ImageData(
-            url=url,
-            name=name,
-            website=website,
-            tags=tags,
-            annotation=annotation,
-            modificationTime=modification_time,
-            headers=headers
-        ).to_dict()
-
+        data = ImageData(url=url, name=name, website=website, tags=tags, annotation=annotation,
+                         modificationTime=modification_time, headers=headers).to_dict()
         if folder_id is not None:
-            data["folderId"] = folder_id
+            data['folderId'] = folder_id
+        return self._ok('POST', '/api/item/addFromURL', body=data)
 
-        resp = requests.post(f'{self.host}/api/item/addFromURL', json=data)
-        return self.check_success(resp)
-
-    def add_from_urls(self, items: list, folder_id: str = None) -> bool:
+    def add_from_urls(self, items: List[Dict[str, Any]], folder_id: Optional[str] = None) -> bool:
         """
         Add multiple images from URLs to Eagle.
 
@@ -251,33 +270,27 @@ class Eagle:
             folder_id (str, optional): If the parameter is defined, images will be added to the corresponding folder.
 
         Returns:
-            bool: A flag.
+            bool: True if Eagle accepted the images.
         """
-        items_ = []
-
-        for item in items:
-            item_ = ImageData(
+        data = {'items': [
+            ImageData(
                 url=item['url'],
                 name=item['name'],
                 website=item.get('website', ''),
                 tags=item.get('tags'),
                 annotation=item.get('annotation', ''),
                 modificationTime=item.get('modificationTime', item.get('modification_time')),
-                headers=item.get('headers')
+                headers=item.get('headers'),
             ).to_dict()
-            items_.append(item_)
-
-        data = {"items": items_}
-
+            for item in items
+        ]}  # type: Dict[str, Any]
         if folder_id is not None:
-            data["folderId"] = folder_id
-
-        resp = requests.post(f'{self.host}/api/item/addFromURLs', json=data)
-        return self.check_success(resp)
+            data['folderId'] = folder_id
+        return self._ok('POST', '/api/item/addFromURLs', body=data)
 
     def add_from_path(self, path: str, name: str, website: Optional[str] = None,
                       annotation: Optional[str] = None, tags: Optional[List[str]] = None,
-                      folder_id: Optional[str] = None) -> bool:
+                      folder_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Add a local file to Eagle.
 
@@ -292,26 +305,18 @@ class Eagle:
             folder_id (str, optional): If this parameter is defined, the image will be added to the corresponding folder.
 
         Returns:
-            bool: A flag.
+            dict: Eagle's whole reply, e.g. ``{'status': 'success'}``. Unlike the other add methods
+            this is not a bool (kept as in 1.1.1), so test ``reply['status'] == 'success'`` or
+            ``eagle.check_success(reply)`` rather than the reply itself: a dict is always truthy.
         """
+        data = _path_item(path, name, website, annotation, tags)
+        data['folderId'] = folder_id
+        payload, status_code = self._client.exchange('POST', '/api/item/addFromPath', body=data)
+        if not is_success(payload):
+            self._failed('/api/item/addFromPath', payload, status_code)
+        return payload
 
-        data = ImageData(
-            url=path,
-            name=name,
-            website=website,
-            tags=tags,
-            annotation=annotation
-        ).to_dict()
-
-        data['path'] = data['url']
-        del data['url']
-
-        data["folderId"] = folder_id
-
-        resp = requests.post(f'{self.host}/api/item/addFromPath', json=data)
-        return resp.json()
-
-    def add_from_paths(self, items: List[Dict], folder_id: Optional[str] = None) -> bool:
+    def add_from_paths(self, items: List[Dict[str, Any]], folder_id: Optional[str] = None) -> bool:
         """
         Add multiple local files to Eagle.
 
@@ -327,33 +332,20 @@ class Eagle:
             folder_id (str, optional): If this parameter is defined, the images will be added to the corresponding folder.
 
         Returns:
-            bool: A flag.
+            bool: True if Eagle accepted the files.
         """
-        items_ = []
-
-        for item in items:
-            item_ = ImageData(
-                url=item["path"],
-                name=item["name"],
-                website=item.get("website", ''),
-                tags=item.get("tags"),
-                annotation=item.get("annotation", '')
-            ).to_dict()
-            item_['path'] = item_['url']
-            del item_['url']
-            items_.append(item_)
-
-        data = {"items": items_}
-
+        data = {'items': [
+            _path_item(item['path'], item['name'], item.get('website', ''), item.get('annotation', ''),
+                       item.get('tags'))
+            for item in items
+        ]}  # type: Dict[str, Any]
         if folder_id is not None:
-            data["folderId"] = folder_id
+            data['folderId'] = folder_id
+        return self._ok('POST', '/api/item/addFromPaths', body=data)
 
-        resp = requests.post(f'{self.host}/api/item/addFromPaths', json=data)
-        return self.check_success(resp)
-
-    def add_bookmark(self, url: str, name: str, tags: List[str] = None,
-                     thumbnail_base64: str = None, modification_time: int = None,
-                     folder_id: str = None) -> bool:
+    def add_bookmark(self, url: str, name: str, tags: Optional[List[str]] = None,
+                     thumbnail_base64: Optional[str] = None, modification_time: Optional[int] = None,
+                     folder_id: Optional[str] = None) -> bool:
         """
         Save the link in the URL form to Eagle.
 
@@ -369,7 +361,7 @@ class Eagle:
             folder_id (str, optional): If this parameter is defined, the image will be added to the corresponding folder.
 
         Returns:
-            bool: A flag.
+            bool: True if Eagle saved the bookmark.
         """
         data = {
             "url": url,
@@ -379,9 +371,7 @@ class Eagle:
             "modificationTime": modification_time,
             "folderId": folder_id
         }
-        resp = requests.post(f'{self.host}/api/item/addBookmark', json=data)
-
-        return self.check_success(resp)
+        return self._ok('POST', '/api/item/addBookmark', body=data)
 
     def get_item_info(self, item_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -393,15 +383,9 @@ class Eagle:
             item_id (str): ID of the file.
 
         Returns:
-            Optional[Dict[str, Any]]: A dictionary containing the properties of the specified file or None if unsuccessful.
+            Optional[Dict[str, Any]]: The properties of the specified file, or None if unsuccessful.
         """
-
-        params = {'id': item_id}
-        resp = requests.get(f'{self.host}/api/item/info', params=params)
-
-        if not self.check_success(resp):
-            return None
-        return resp.json().get('data')
+        return self._data('GET', '/api/item/info', {'id': item_id}, none_on_error=True)
 
     def get_thumbnail_path(self, item_id: str) -> Optional[str]:
         """
@@ -413,16 +397,13 @@ class Eagle:
             item_id (str): ID of the file.
 
         Returns:
-            Optional[str]: The thumbnail path of the specified file or None if unsuccessful.
+            Optional[str]: The thumbnail path of the specified file, or None if unsuccessful.
         """
-        params = {'id': item_id}
-        resp = requests.get(f'{self.host}/api/item/thumbnail', params=params)
+        return self._data('GET', '/api/item/thumbnail', {'id': item_id}, none_on_error=True)
 
-        if not self.check_success(resp):
-            return None
-        return resp.json().get('data')
-
-    def list_items(self, limit: int = 200, offset: int = 0, order_by: Optional[str] = None, keyword: Optional[str] = None, ext: Optional[str] = None, tags: Optional[List[str]] = None, folders: Optional[List[str]] = None) -> dict:
+    def list_items(self, limit: int = 200, offset: int = 0, order_by: Optional[str] = None,
+                   keyword: Optional[str] = None, ext: Optional[str] = None, tags: Optional[List[str]] = None,
+                   folders: Optional[List[str]] = None) -> Optional[List[Dict[str, Any]]]:
         """
         Get items that match the filter condition.
 
@@ -431,16 +412,17 @@ class Eagle:
         Args:
             limit (int): The number of items to be displayed. The default number is 200.
             offset (int): Offset a collection of results from the api. Start with 0.
-            order_by (Optional[str]): The sorting order. CREATEDATE, FILESIZE, NAME, RESOLUTION, add a minus sign for descending order: -FILESIZE.
+            order_by (Optional[str]): The sorting order. CREATEDATE, FILESIZE, NAME, RESOLUTION, add a minus sign for
+                descending order: -FILESIZE.
             keyword (Optional[str]): Filter by the keyword.
             ext (Optional[str]): Filter by the extension type, e.g.: jpg, png.
             tags (Optional[List[str]]): Filter by tags.
             folders (Optional[List[str]]): Filter by Folders.
 
         Returns:
-            dict: A dictionary containing the filtered items and their information.
+            list: The matching items.
         """
-        params = {'limit': limit, 'offset': offset}
+        params = {'limit': limit, 'offset': offset}  # type: Dict[str, Any]
         if order_by:
             params['orderBy'] = order_by
         if keyword:
@@ -451,10 +433,7 @@ class Eagle:
             params['tags'] = ','.join(tags)
         if folders:
             params['folders'] = ','.join(folders)
-
-        resp = requests.get(f'{self.host}/api/item/list', params=params)
-
-        return resp.json().get('data')
+        return self._data('GET', '/api/item/list', params)
 
     def move_to_trash(self, item_ids: List[str]) -> bool:
         """
@@ -468,10 +447,7 @@ class Eagle:
         Returns:
             bool: True if the operation was successful, False otherwise.
         """
-        data = {"itemIds": item_ids}
-        resp = requests.post(f'{self.host}/api/item/moveToTrash', json=data)
-
-        return self.check_success(resp)
+        return self._ok('POST', '/api/item/moveToTrash', body={"itemIds": item_ids})
 
     def refresh_palette(self, item_id: str) -> bool:
         """
@@ -486,10 +462,7 @@ class Eagle:
         Returns:
             bool: True if the operation was successful, False otherwise.
         """
-        data = {"id": item_id}
-        resp = requests.post(f'{self.host}/api/item/refreshPalette', json=data)
-
-        return self.check_success(resp)
+        return self._ok('POST', '/api/item/refreshPalette', body={"id": item_id})
 
     def refresh_thumbnail(self, item_id: str) -> bool:
         """
@@ -505,12 +478,10 @@ class Eagle:
         Returns:
             bool: True if the operation was successful, False otherwise.
         """
-        data = {"id": item_id}
-        resp = requests.post(f'{self.host}/api/item/refreshThumbnail', json=data)
+        return self._ok('POST', '/api/item/refreshThumbnail', body={"id": item_id})
 
-        return self.check_success(resp)
-
-    def update_item(self, item_id: str, tags: Optional[List[str]] = None, annotation: Optional[str] = None, url: Optional[str] = None, star: Optional[int] = None) -> dict:
+    def update_item(self, item_id: str, tags: Optional[List[str]] = None, annotation: Optional[str] = None,
+                    url: Optional[str] = None, star: Optional[int] = None) -> Dict[str, Any]:
         """
         Modify data of specified fields of the item.
 
@@ -525,33 +496,32 @@ class Eagle:
 
         Returns:
             dict: Updated item data.
-        """
-        data = {"id": item_id}
 
+        Raises:
+            EagleAPIError: Eagle could not update the item (always raised, as in 1.1.1, where it was a
+                plain ``Exception``; ``EagleAPIError`` is a subclass of it).
+        """
+        data = {"id": item_id}  # type: Dict[str, Any]
         if tags is not None:
             data["tags"] = tags
-
         if annotation is not None:
             data["annotation"] = annotation
-
         if url is not None:
             data["url"] = url
-
         if star is not None:
             data["star"] = star
 
-        resp = requests.post(f'{self.host}/api/item/update', json=data)
-
-        if not self.check_success(resp):
-            raise Exception("[Eagle] Failed to update the item.")
-
-        return resp.json().get("data")
+        payload, status_code = self._client.exchange('POST', '/api/item/update', body=data)
+        if not is_success(payload):
+            raise EagleAPIError('[Eagle] Failed to update the item: {}'.format(error_message(payload)),
+                                endpoint='/api/item/update', status_code=status_code, payload=payload)
+        return payload.get("data")
 
     # =================================================
     # Folder methods
     # =================================================
 
-    def create_folder(self, folder_name: str, parent_id=None) -> dict:
+    def create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Create a folder. The created folder will be placed at the bottom of the folder list of the current library.
 
@@ -559,22 +529,18 @@ class Eagle:
 
         Args:
             folder_name (str): The name of the folder to be created.
-            parent_id (int, optional): The ID of the parent folder. If not provided, the created folder will be at the top level. Defaults to None.
-        
-        Returns:
-            dict: A dictionary containing the result information of the created folder.
-        """
+            parent_id (str, optional): The ID of the parent folder. If not provided, the created folder will be at the
+                top level. Defaults to None.
 
-        data = {
-            'folderName': folder_name,
-        }
+        Returns:
+            dict: The created folder.
+        """
+        data = {'folderName': folder_name}
         if parent_id is not None:
             data['parent'] = parent_id
+        return self._data('POST', '/api/folder/create', body=data)
 
-        resp = requests.post(f'{self.host}/api/folder/create', json=data)
-        return resp.json().get('data')
-
-    def rename_folder(self, folder_id: str, new_name: str) -> dict:
+    def rename_folder(self, folder_id: str, new_name: str) -> Optional[Dict[str, Any]]:
         """
         Rename the specified folder.
 
@@ -583,19 +549,14 @@ class Eagle:
         Args:
             folder_id (str): The ID of the folder to be renamed.
             new_name (str): The new name for the folder.
-        
+
         Returns:
-            dict: A dictionary containing the result information of the renamed folder.
+            dict: The renamed folder.
         """
-        data = {
-            'folderId': folder_id,
-            'newName': new_name,
-        }
+        return self._data('POST', '/api/folder/rename', body={'folderId': folder_id, 'newName': new_name})
 
-        resp = requests.post(f'{self.host}/api/folder/rename', json=data)
-        return resp.json().get('data')
-
-    def update_folder(self, folder_id: str, new_name: str = None, new_description: str = None, new_color: str = None) -> dict:
+    def update_folder(self, folder_id: str, new_name: Optional[str] = None, new_description: Optional[str] = None,
+                      new_color: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Update the specified folder.
 
@@ -605,54 +566,48 @@ class Eagle:
             folder_id (str): The ID of the folder to be updated.
             new_name (str, optional): The new name for the folder. Defaults to None.
             new_description (str, optional): The new description for the folder. Defaults to None.
-            new_color (str, optional): The new color for the folder. Valid options are "red", "orange", "green", "yellow", "aqua", "blue", "purple", "pink". Defaults to None.
-        
+            new_color (str, optional): The new color for the folder. Valid options are "red", "orange", "green",
+                "yellow", "aqua", "blue", "purple", "pink". Defaults to None.
+
         Returns:
-            dict: A dictionary containing the result information of the updated folder.
+            dict: The updated folder.
         """
-        data = {
-            'folderId': folder_id,
-        }
+        data = {'folderId': folder_id}
         if new_name is not None:
             data['newName'] = new_name
         if new_description is not None:
             data['newDescription'] = new_description
         if new_color is not None:
             data['newColor'] = new_color
+        return self._data('POST', '/api/folder/update', body=data)
 
-        resp = requests.post(f'{self.host}/api/folder/update', json=data)
-        return resp.json().get('data')
-
-    def list_folders(self) -> dict:
+    def list_folders(self) -> Optional[List[Dict[str, Any]]]:
         """
         Get the list of folders of the current library.
 
         API DOC: https://api.eagle.cool/folder/list
 
         Returns:
-            list: A list of dictionaries containing the folder information.
+            list: The folders, each with its ``children``.
         """
+        return self._data('GET', '/api/folder/list')
 
-        resp = requests.get(f'{self.host}/api/folder/list')
-        return resp.json().get('data')
-
-    def get_recent_folders(self) -> dict:
+    def get_recent_folders(self) -> Optional[List[Dict[str, Any]]]:
         """
         Get the list of recently used folders by the user.
 
         API DOC: https://api.eagle.cool/folder/list-recent
 
         Returns:
-            dict: A dictionary containing the status and data of the recently used folders.
+            list: The recently used folders.
         """
-        resp = requests.get(f'{self.host}/api/folder/listRecent')
-        return resp.json().get('data')
+        return self._data('GET', '/api/folder/listRecent')
 
     # =================================================
     # Library methods
     # =================================================
 
-    def get_library_info(self) -> dict:
+    def get_library_info(self) -> Optional[Dict[str, Any]]:
         """
         Get detailed information of the currently running library. This function can be used to obtain details
         such as All Folders, All Smart Folders, All Tag Groups, Quick Access, etc.
@@ -660,22 +615,20 @@ class Eagle:
         API DOC: https://api.eagle.cool/library/info
 
         Returns:
-            dict: A dictionary containing detailed information about the currently running library.
+            dict: Detailed information about the currently running library.
         """
-        resp = requests.get(f'{self.host}/api/library/info')
-        return resp.json().get('data')
+        return self._data('GET', '/api/library/info')
 
-    def get_library_history(self) -> list:
+    def get_library_history(self) -> Optional[List[str]]:
         """
         Get the list of libraries recently opened by the Application.
 
         API DOC: https://api.eagle.cool/library/history
 
         Returns:
-            list: A list containing the paths of recently opened libraries.
+            list: The paths of recently opened libraries.
         """
-        resp = requests.get(f'{self.host}/api/library/history')
-        return resp.json().get('data')
+        return self._data('GET', '/api/library/history')
 
     def switch_library(self, library_path: str) -> bool:
         """
@@ -687,11 +640,6 @@ class Eagle:
             library_path (str): The path of the library to switch to.
 
         Returns:
-            bool: A flag.
+            bool: True if Eagle switched to the library.
         """
-        data = {
-            "libraryPath": library_path
-        }
-        resp = requests.post(f'{self.host}/api/library/switch', json=data)
-        return self.check_success(resp)
-
+        return self._ok('POST', '/api/library/switch', body={"libraryPath": library_path})

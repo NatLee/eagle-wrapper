@@ -7,6 +7,8 @@ Parameter names follow the Eagle API documentation: https://api.eagle.cool/
 import unittest
 from unittest import mock
 
+import requests
+
 from eaglewrapper import Eagle
 
 HOST = 'http://localhost:41595'
@@ -18,6 +20,12 @@ def fake_response(payload):
     resp = mock.Mock()
     resp.json.return_value = payload
     return resp
+
+
+def sent_url(call):
+    """The full URL a mocked requests.get/post call would hit, query string included."""
+    args, kwargs = call
+    return requests.Request('GET', args[0], params=kwargs.get('params')).prepare().url
 
 
 class EagleRequestTestCase(unittest.TestCase):
@@ -247,8 +255,7 @@ class TestItem(EagleRequestTestCase):
     def test_get_img_list_info_readme_example(self):
         self.reply({'status': 'success', 'data': [{'name': 'ぼっち'}, {'name': 'example'}]})
         self.assertEqual(self.eagle.get_img_list_info(10, 'ぼ'), [{'name': 'ぼっち'}])
-        args, kwargs = self.get.call_args
-        self.assertEqual(args[0], HOST + '/api/item/list?limit=10')
+        self.assertEqual(sent_url(self.get.call_args), HOST + '/api/item/list?limit=10')
 
 
 class TestLibrary(EagleRequestTestCase):
