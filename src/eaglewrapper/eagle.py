@@ -246,6 +246,7 @@ class Eagle:
                 - annotation (str, optional): The annotation for the image.
                 - tags (list, optional): Tags for the image.
                 - modificationTime (int, optional): The creation date of the image.
+                  `modification_time` is accepted as well.
                 - headers (dict, optional): Customize the HTTP headers properties.
             folder_id (str, optional): If the parameter is defined, images will be added to the corresponding folder.
 
@@ -258,11 +259,11 @@ class Eagle:
             item_ = ImageData(
                 url=item['url'],
                 name=item['name'],
-                website=item['website'],
-                tags=item['tags'],
-                annotation=item['annotation'],
-                modificationTime=item['modification_time'],
-                headers=item['headers']
+                website=item.get('website', ''),
+                tags=item.get('tags'),
+                annotation=item.get('annotation', ''),
+                modificationTime=item.get('modificationTime', item.get('modification_time')),
+                headers=item.get('headers')
             ).to_dict()
             items_.append(item_)
 
@@ -334,9 +335,9 @@ class Eagle:
             item_ = ImageData(
                 url=item["path"],
                 name=item["name"],
-                website=item["website"],
-                tags=item["tags"],
-                annotation=item["annotation"]
+                website=item.get("website", ''),
+                tags=item.get("tags"),
+                annotation=item.get("annotation", '')
             ).to_dict()
             item_['path'] = item_['url']
             del item_['url']

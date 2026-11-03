@@ -134,6 +134,18 @@ class TestItem(EagleRequestTestCase):
                        'tags': ['t'], 'annotation': 'note', 'modificationTime': 1, 'headers': {'h': 'v'}}],
             'folderId': 'F1'})
 
+    def test_add_from_urls_with_only_required_keys(self):
+        # website, tags, annotation, modificationTime and headers are documented as optional.
+        self.assertIs(self.eagle.add_from_urls([{'url': 'https://example.com/a.jpg', 'name': 'a'}]), True)
+        self.assert_post('/api/item/addFromURLs', {
+            'items': [{'url': 'https://example.com/a.jpg', 'name': 'a', 'website': '', 'tags': [],
+                       'annotation': '', 'modificationTime': None, 'headers': {}}]})
+
+    def test_add_from_urls_accepts_documented_modificationTime_key(self):
+        self.eagle.add_from_urls([{'url': 'https://example.com/a.jpg', 'name': 'a', 'modificationTime': 5}])
+        args, kwargs = self.post.call_args
+        self.assertEqual(kwargs['json']['items'][0]['modificationTime'], 5)
+
     def test_add_from_path(self):
         self.eagle.add_from_path('/tmp/a.jpg', 'a', website='https://example.com', annotation='note',
                                  tags=['t'], folder_id='F1')
@@ -158,6 +170,17 @@ class TestItem(EagleRequestTestCase):
         self.assertNotIn('url', item)
         for key, value in {'path': '/tmp/a.jpg', 'name': 'a', 'website': 'https://example.com',
                            'tags': ['t'], 'annotation': 'note'}.items():
+            self.assertEqual(item[key], value)
+
+    def test_add_from_paths_with_only_required_keys(self):
+        # website, annotation and tags are documented as optional.
+        self.assertIs(self.eagle.add_from_paths([{'path': '/tmp/a.jpg', 'name': 'a'}]), True)
+        args, kwargs = self.post.call_args
+        self.assertEqual(args[0], HOST + '/api/item/addFromPaths')
+        self.assertNotIn('folderId', kwargs['json'])
+        item = kwargs['json']['items'][0]
+        for key, value in {'path': '/tmp/a.jpg', 'name': 'a', 'website': '', 'tags': [],
+                           'annotation': ''}.items():
             self.assertEqual(item[key], value)
 
     def test_add_bookmark(self):
