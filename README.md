@@ -2,14 +2,14 @@
 <div align="center" style="text-align: center">
 
 <p style="text-align: center">
-  <img align="center" src="https://raw.githubusercontent.com/NatLee/Eagle-Wrapper/main/doc/repo-logo.png" alt="Eagle Wrapper">
+  <img align="center" src="https://raw.githubusercontent.com/NatLee/eagle-wrapper/main/doc/repo-logo.png" alt="Eagle Wrapper">
 </p>
 
 **Eagle Wrapper - A wrapper for Eagle API**
 
 [![PyPI pyversions](https://img.shields.io/pypi/pyversions/EagleWrapper.svg)](https://pypi.python.org/pypi/EagleWrapper/) [![PyPI implementation](https://img.shields.io/pypi/implementation/EagleWrapper.svg)](https://pypi.python.org/pypi/EagleWrapper/)
 
-[![Test](https://github.com/NatLee/Eagle-Wrapper/actions/workflows/test.yml/badge.svg)](https://github.com/NatLee/Eagle-Wrappger/actions/workflows/test.yml) [![Release](https://github.com/NatLee/Eagle-Wrapper/actions/workflows/release.yml/badge.svg)](https://github.com/NatLee/Eagle-Wrapper/actions/workflows/release.yml)
+[![Test](https://github.com/NatLee/eagle-wrapper/actions/workflows/test.yml/badge.svg)](https://github.com/NatLee/eagle-wrapper/actions/workflows/test.yml) [![Release](https://github.com/NatLee/eagle-wrapper/actions/workflows/release.yml/badge.svg)](https://github.com/NatLee/eagle-wrapper/actions/workflows/release.yml)
 
 [![PyPI status](https://img.shields.io/pypi/status/EagleWrapper.svg)](https://pypi.python.org/pypi/EagleWrapper/) [![PyPI license](https://img.shields.io/pypi/l/EagleWrapper.svg)](https://pypi.python.org/pypi/EagleWrapper/)
 
@@ -31,6 +31,8 @@ Its official website is https://eagle.cool/.
 ## API Reference
 
 This wrapper is reference from [Eagle Official API documentation](https://api.eagle.cool/)
+
+> Eagle now calls this API the legacy **V1** API (`/api/...`). Eagle 4.0 Build 21 and later also offer a [V2 Web API](https://developer.eagle.cool/web-api) (`/api/v2/...`), which this wrapper does not cover yet.
 
 List APIs are available in this wrapper.
 
@@ -79,7 +81,7 @@ pip install EagleWrapper
 
 - get_img_info_from_lib_path
 
-> This is a method of searching file `metadata.json` of images from directly library folder, so it will fast than using `get_img_list_info`.
+> This is a method of searching file `metadata.json` of images from directly library folder, so it is faster than using `get_img_list_info`.
 
 ```python
 from eaglewrapper import Eagle
@@ -104,7 +106,7 @@ eagle.add_from_url(url, name, tags, website, annotation)
 
 This output will show in Eagle:
 
-![add-from-url](https://raw.githubusercontent.com/NatLee/Eagle-Wrapper/main/doc/add-from-url.png)
+![add-from-url](https://raw.githubusercontent.com/NatLee/eagle-wrapper/main/doc/add-from-url.png)
 
 - get_img_list_info
 
@@ -156,6 +158,22 @@ The output is:
         }
     ]
 }]
+```
+
+## Development
+
+The tests replace the HTTP calls with mocks, so Eagle does not need to be running.
+
+```bash
+pip install -e . pytest
+pytest tests
+```
+
+`tox` runs the same tests plus a check of the source distribution:
+
+```bash
+pip install tox
+tox -e py
 ```
 
 ## Contributor
