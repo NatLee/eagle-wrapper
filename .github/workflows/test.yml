@@ -11,59 +11,60 @@ on:
       - master
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python: [3.7, 3.8, 3.9, '3.10', '3.11']
-        os:
-            -   name: Linux
-                runs-on: ubuntu-latest
-                python_platform: linux
-            -   name: Windows
-                runs-on: windows-latest
-                python_platform: win32
-            -   name: macOS
-                runs-on: macos-latest
-                python_platform: darwin
+        os: [ubuntu-latest]
+        python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: windows-latest
+            python: "3.14"
+          - os: macos-latest
+            python: "3.14"
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Install Tox and other packages
+      - name: Install tox
         run: pip install tox
-      - name: Run Tox
-        # Run tox using the version of Python in `PATH`
+      - name: Run tests
+        # Runs tox with the Python version on PATH
         run: tox -e py
 
+  test-legacy:
+    # The package still supports Python 3.6 and 3.7, which setup-python no longer
+    # provides on current runners, so test them in the official Python images.
+    name: Python ${{ matrix.python }} in a container
+    runs-on: ubuntu-latest
+    container: python:${{ matrix.python }}-slim
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.6", "3.7"]
 
-  build36:
-      runs-on: ${{ matrix.os.runs-on }}
-      strategy:
-          matrix:
-              python-version: [ 3.6 ]
-              os:
-                  -   name: Linux
-                      runs-on: ubuntu-20.04
-                      python_platform: linux
-                  -   name: Windows
-                      runs-on: windows-latest
-                      python_platform: win32
-                  -   name: macOS
-                      runs-on: macos-latest
-                      python_platform: darwin
-      steps:
-      -   uses: actions/checkout@v3
-      -   name: Set up Python 3.6
-          uses: actions/setup-python@v4
-          with:
-            python-version: 3.6
-      -   name: install-dependencies
-          run: |
-              python -m pip install --upgrade pip
-              python -m pip install requests loguru
-      -   name: Test with unittest
-          run: |
-              python setup.py test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the package and pytest
+        run: python -m pip install . pytest
+      - name: Run tests
+        run: python -m pytest tests
+
+  package:
+    # Build the sdist and wheel the same way the release workflow does, and validate the metadata.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and check
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
