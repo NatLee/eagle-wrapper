@@ -23,6 +23,9 @@ class TestSupportedApis(unittest.TestCase):
                          ('/api/v2/', '4.0 Build 21', '4.0 Build 22'))
         self.assertIs(eaglewrapper.SUPPORTED_APIS, SUPPORTED_APIS)
 
+    def test_generations_count_up_from_1(self):
+        self.assertEqual([api.generation for api in SUPPORTED_APIS], [1, 2])
+
     def test_path(self):
         self.assertEqual(API_V2.path('item/get'), '/api/v2/item/get')
         self.assertEqual(API_V2.path('/item/get'), '/api/v2/item/get')
