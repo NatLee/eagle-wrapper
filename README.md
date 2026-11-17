@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/NatLee/eagle-wrapper/main/doc/repo-logo.png" alt="Eagle Wrapper" width="560">
+<img src="doc/repo-logo.png" alt="Eagle Wrapper" width="560">
 
 **Script [Eagle](https://eagle.cool/) from Python: both of its local HTTP APIs, V1 and the new Web API V2.**
 
@@ -9,7 +9,7 @@
 [![Test](https://github.com/NatLee/eagle-wrapper/actions/workflows/test.yml/badge.svg)](https://github.com/NatLee/eagle-wrapper/actions/workflows/test.yml)
 [![Release](https://github.com/NatLee/eagle-wrapper/actions/workflows/release.yml/badge.svg)](https://github.com/NatLee/eagle-wrapper/actions/workflows/release.yml)
 [![Downloads](https://img.shields.io/pypi/dm/EagleWrapper.svg)](https://pypi.org/project/EagleWrapper/)
-[![License: MIT](https://img.shields.io/pypi/l/EagleWrapper.svg)](https://github.com/NatLee/eagle-wrapper/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/pypi/l/EagleWrapper.svg)](LICENSE)
 
 </div>
 
@@ -19,7 +19,7 @@ HTTP requests can add files to it, search it, tag things and manage folders. Eag
 into plain Python methods, so a downloader, a tagging script or a backup job is a few lines of code.
 It can also read an Eagle library folder straight from disk when the app is closed.
 
-![How EagleWrapper talks to Eagle](https://raw.githubusercontent.com/NatLee/eagle-wrapper/main/doc/api-overview.png)
+![How EagleWrapper talks to Eagle](doc/api-overview.png)
 
 ## Which Eagle API? (checked November 2026)
 
@@ -68,7 +68,7 @@ if eagle.supports_v2():
 
 This is what the `add_from_url` call looks like in Eagle:
 
-![add-from-url](https://raw.githubusercontent.com/NatLee/eagle-wrapper/main/doc/add-from-url.png)
+![add-from-url](doc/add-from-url.png)
 
 ## Connecting
 
