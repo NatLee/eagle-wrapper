@@ -18,11 +18,11 @@ PAGE = 'https://github.com/NatLee/eagle-wrapper/blob/v9.9.9/'
 class TestReadmeLinks(unittest.TestCase):
 
     def test_embedded_images_point_at_the_file_in_the_release_tag(self):
-        readme = ('<img src="doc/repo-logo.png" width="560">\n'
-                  '![overview](doc/api-overview.png) <source srcset="doc/a.png">\n')
+        readme = ('<img src="docs/images/repo-logo.png" width="560">\n'
+                  '![overview](docs/images/api-overview.png) <source srcset="docs/images/a.png">\n')
         self.assertEqual(absolute_links(readme, 'v9.9.9'), (
-            '<img src="' + RAW + 'doc/repo-logo.png" width="560">\n'
-            '![overview](' + RAW + 'doc/api-overview.png) <source srcset="' + RAW + 'doc/a.png">\n'))
+            '<img src="' + RAW + 'docs/images/repo-logo.png" width="560">\n'
+            '![overview](' + RAW + 'docs/images/api-overview.png) <source srcset="' + RAW + 'docs/images/a.png">\n'))
 
     def test_links_point_at_the_github_page_in_the_release_tag(self):
         readme = 'See [`tests/`](tests/) and <a href="src/eaglewrapper/eagle.py">eagle.py</a>.'
@@ -37,13 +37,13 @@ class TestReadmeLinks(unittest.TestCase):
     def test_absolute_links_and_anchors_are_left_alone(self):
         readme = ('[issue #1](https://github.com/NatLee/eagle-wrapper/issues/1) [up](#installation) '
                   '<img src="https://avatars.githubusercontent.com/u/1"> [mail](mailto:a@b.c) '
-                  '<a href="/NatLee">x</a> `eagle.add_from_url(\'doc/x.png\')`')
+                  '<a href="/NatLee">x</a> `eagle.add_from_url(\'docs/images/x.png\')`')
         self.assertEqual(absolute_links(readme, 'v9.9.9'), readme)
 
     def test_the_long_description_links_to_the_tag_of_this_version(self):
         version = SETUP['VERSION']
         description = SETUP['LONG_DESCRIPTION']
-        self.assertIn('raw.githubusercontent.com/NatLee/eagle-wrapper/v{}/doc/repo-logo.png'.format(version),
+        self.assertIn('raw.githubusercontent.com/NatLee/eagle-wrapper/v{}/docs/images/repo-logo.png'.format(version),
                       description)
         self.assertEqual(absolute_links(description, 'v' + version), description)
 

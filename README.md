@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="doc/repo-logo.png" alt="Eagle Wrapper" width="560">
+<img src="docs/images/repo-logo.png" alt="Eagle Wrapper" width="560">
 
 **Script [Eagle](https://eagle.cool/) from Python: both of its local HTTP APIs, V1 and the new Web API V2.**
 
@@ -19,7 +19,7 @@ HTTP requests can add files to it, search it, tag things and manage folders. Eag
 into plain Python methods, so a downloader, a tagging script or a backup job is a few lines of code.
 It can also read an Eagle library folder straight from disk when the app is closed.
 
-![How EagleWrapper talks to Eagle](doc/api-overview.png)
+![How EagleWrapper talks to Eagle](docs/images/api-overview.png)
 
 ## Which Eagle API? (checked November 2026)
 
@@ -68,7 +68,7 @@ if eagle.supports_v2():
 
 This is what the `add_from_url` call looks like in Eagle:
 
-![add-from-url](doc/add-from-url.png)
+![add-from-url](docs/images/add-from-url.png)
 
 ## Connecting
 

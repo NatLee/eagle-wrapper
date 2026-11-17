@@ -3,4 +3,4 @@ include *.md
 include LICENSE
 include src/eaglewrapper/py.typed
 recursive-include tests *.py
-recursive-include doc *.png
+recursive-include docs/images *.png
