@@ -286,7 +286,7 @@ that brought it (see the [V1 changelog](https://api.eagle.cool/changelog) and th
 | 1.0.0 (April 2023) | V1 | 3 endpoints (add from URL, list items, update item) and the library-folder reader |
 | 1.1.0, 1.1.1 (April 2023) | V1 | all 21 endpoints documented at the time |
 | 1.2.0 (November 2026) | V1 and Web API V2 | V1 up to its last change (Eagle 3.0 Build 23) plus `/api/library/icon`; V2 up to Eagle 4.0 Build 22 (smart folders, comments) |
-| 2.0.0 (November 2026) | V1 and Web API V2 | the same as 1.2.0, plus `SUPPORTED_APIS` (below) |
+| 2.0.0, 2.0.1 (November 2026) | V1 and Web API V2 | the same as 1.2.0, plus `SUPPORTED_APIS` (below) |
 
 1.2.0 is the odd one out. It was the first release that speaks Web API V2, but it came out as 1.2.0,
 before this rule was written down, because nothing changed for code written against V1. 2.0.0 puts the
